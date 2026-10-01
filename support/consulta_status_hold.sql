@@ -3,16 +3,17 @@ USE mdb;
 --------------------------------------------------------------------------------
 -- Consulta de apoio: status x flag de hold (cr_stat.hold)
 --
--- Mostra cada status do SDM e como ele entra na apuracao de tempo da Decision.
--- A regra vem do proprio produto (atributo "Stop Service Type Events"): ao entrar
--- num status com esse atributo, o relogio do SLA para. No banco esse atributo e a
--- coluna dbo.cr_stat.hold (0 ou 1).
+-- Mostra cada status do SDM e o seu flag de hold. O flag vem do proprio produto
+-- (atributo "Stop Service Type Events"): ao entrar num status com esse atributo,
+-- o relogio de SLA do SDM para. No banco esse atributo e a coluna
+-- dbo.cr_stat.hold (0 ou 1).
 --
---   hold = 1 -> SUSPENSO -> entra no Tempo Suspenso
---   hold = 0 -> ATIVO    -> entra no Tempo Total Decision
+--   hold = 1 -> SUSPENSO -> status que para o relogio de SLA do SDM
+--   hold = 0 -> ATIVO    -> status em que o relogio corre
 --
--- Serve para demonstrar o que a consulta considera em "Tempo Suspenso".
--- Referencia: decision/docs/tempo-decision-calculation.md (secao 2).
+-- Na apuracao da Virtual nenhum status suspende a contagem: Tini e Tsol sao
+-- medidos de abertura a inicio e a resolucao (docs/virtual-calculation.md,
+-- secao 9). Esta consulta serve para investigar chamados e conferir codigos.
 --------------------------------------------------------------------------------
 
 -- [1] Todos os status e sua classificacao
@@ -25,11 +26,11 @@ SELECT
     s.del                                                 AS [Excluido]
 FROM dbo.cr_stat AS s
 ORDER BY
-    s.hold   DESC,   -- primeiro os que contam como Tempo Suspenso
+    s.hold   DESC,   -- primeiro os que param o relogio de SLA do SDM
     s.active DESC,   -- depois os em uso antes dos legados
     s.sym;
 
--- [2] Somente os status que contam como Tempo Suspenso (hold = 1)
+-- [2] Somente os status que param o relogio de SLA do SDM (hold = 1)
 SELECT
     s.sym    AS [Status],
     s.code   AS [Codigo],

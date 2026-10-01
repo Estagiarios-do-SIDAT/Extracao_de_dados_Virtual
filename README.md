@@ -1,157 +1,118 @@
-# Extração de dados — COI
+# Extração de dados — Virtual
 
-Repositório com consultas SQL, documentações e arquivos de validação usados para mensurar a volumetria e a auditoria do **COI** a partir da base do **CA Service Desk Manager**.
+Consultas SQL e documentação da apuração de **FAIA** e **FARC** do fornecedor
+**Virtual**, a partir da base do **CA Service Desk Manager** (`mdb`).
 
-O objetivo do projeto é manter, em um só lugar, as consultas usadas para identificar chamados registrados e encerrados pelo COI, a explicação das regras aplicadas e os materiais de conferência contra os relatórios recebidos.
+O objetivo é reproduzir, direto do SDM, as abas `Chamados_TCU` e `Chamados_24x7`
+das planilhas mensais **Planilha_NMS_TCU** da Virtual. São duas planilhas,
+**DCIM** e **Manutenção**, cada uma com seu valor mensal contratado.
 
-Este repositório atende **somente o COI**. Decision e A2B/Protect4 têm repositórios próprios (`Extracao_de_dados_Decision` e `Extracao_de_dados_A2B`) e nada deles vive aqui.
+Este repositório atende **somente a Virtual**. Decision, A2B/Protect4 e COI têm
+repositórios próprios.
 
-## Estrutura do repositório
+## Estrutura
 
 ```text
 .
 ├── queries/
-│   ├── consulta_coi_encerrados.sql
-│   ├── consulta_coi_pesquisa_satisfacao_encerrados.sql
-│   ├── consulta_coi_registrados_detalhe.sql
-│   ├── consulta_coi_registrados_encerrados_diario.sql
-│   ├── consulta_coi_registrados_membros.sql
-│   ├── consulta_coi_registrados_mensal.sql
-│   ├── consulta_coi_registrados_por_evidencia.sql
-│   ├── consulta_coi_registrados_por_hora.sql
-│   ├── consulta_coi_registrados_por_registrador.sql
-│   ├── consulta_coi_registrados_total_com_tecnicos.sql
-│   ├── consulta_coi_registrados_universo_bruto.sql
-│   └── consulta_coi_registrados_validacao.sql
+│   └── consulta_virtual_faia_farc.sql              consulta de referência
 ├── powerbi/
-│   └── <consulta de queries/>_power_bi.sql   12 arquivos, um por consulta
+│   ├── consulta_virtual_chamados_tcu_power_bi.sql  aba Chamados_TCU
+│   └── consulta_virtual_chamados_24x7_power_bi.sql aba Chamados_24x7
 ├── docs/
-│   ├── coi-calculation.md                 regras de cálculo, a partir de queries/
-│   ├── powerbi-query.md                   documentação das consultas do Power BI
-│   └── documentacao-powerbi-coi.html      versão resumida para o Power BI
+│   ├── virtual-calculation.md                      regras de cálculo
+│   └── powerbi-query.md                            consultas do Power BI
 ├── project-context/
-│   └── COI-HISTORICO-CONTEXTO-MESTRE.md   Histórico Mestre do COI
-├── support/
-│   ├── consulta_logs_chamados_listados.sql
-│   ├── consulta_status_chamados.sql
-│   ├── consulta_status_hold.sql
-│   └── consulta_tipos_chamado.sql
-├── README.md
-└── .git/
+│   └── VIRTUAL-HISTORICO-CONTEXTO-MESTRE.md        contexto de manutenção
+├── support/                                        consultas auxiliares de investigação
+└── README.md
 ```
 
-## O que é o COI
+## Consulta de referência
 
-O COI não tem FAIA nem FARC. A demanda é de **volumetria**: quantos chamados entram, quantos saem e em que horário.
+[`queries/consulta_virtual_faia_farc.sql`](queries/consulta_virtual_faia_farc.sql)
+devolve dois resultados, com as 23 colunas das abas, na ordem da planilha:
 
-A regra de negócio é construída a partir do histórico de fila, do tipo de chamado e da evidência de passagem pelo COI. O objetivo é manter uma base consistente para comparar a apuração com os relatórios do fornecedor e com o painel.
-
-## Consultas principais
-
-### Registrados pelo COI
-
-O bloco de consultas de registrados responde à pergunta: **quais chamados efetivamente entraram na base do COI no período**.
-
-Um chamado entra por evidência de passagem pela fila COI (cadeia real de grupo, histórico, fallback de grupo atual) **ou** por registro da automação oficial Task Scheduler / SESUC, que registra direto na fila do NSTI ou do fornecedor. As sete consultas e as suas sete versões do Power BI compartilham um **bloco canônico** idêntico, conferido por SHA256. A regra está descrita em [`docs/coi-calculation.md`](docs/coi-calculation.md); a precedência e o hash vigente estão no Histórico Mestre.
-
-**Indicadores** — o que alimenta gráfico e painel:
-
-| Arquivo | Indicador | Saída |
-|---|---|---|
-| [`queries/consulta_coi_registrados_mensal.sql`](queries/consulta_coi_registrados_mensal.sql) | Registrados por mês, separando Incidentes e Solicitações | `Ano, Mes, MesAno, Incidentes, Solicitacoes, Total` |
-| [`queries/consulta_coi_registrados_encerrados_diario.sql`](queries/consulta_coi_registrados_encerrados_diario.sql) | Registrados × Encerrados por dia (I e R juntos) | `Dia, Registrados, Encerrados` |
-| [`queries/consulta_coi_registrados_por_hora.sql`](queries/consulta_coi_registrados_por_hora.sql) | Registrados por hora, dias consolidados | `Ano, Mes, MesAno, Hora, HoraLabel, QtdRegistrados` |
-
-**Auditoria** — a mesma população, por outros ângulos, para provar o número:
-
-| Arquivo | Para que serve |
+| Resultado | Aba |
 |---|---|
-| [`queries/consulta_coi_registrados_detalhe.sql`](queries/consulta_coi_registrados_detalhe.sql) | **Uma linha por SDM**: data/hora do registro, tipo, quem registrou, grupo atual, evidência e data da primeira entrada na fila |
-| [`queries/consulta_coi_registrados_por_registrador.sql`](queries/consulta_coi_registrados_por_registrador.sql) | A mesma população agrupada por quem registrou (`log_agent`) |
-| [`queries/consulta_coi_registrados_por_evidencia.sql`](queries/consulta_coi_registrados_por_evidencia.sql) | Composição do total por classe de evidência |
-| [`queries/consulta_coi_registrados_validacao.sql`](queries/consulta_coi_registrados_validacao.sql) | Uma linha de sanidade com validações automáticas |
+| 1 | `Chamados_TCU` |
+| 2 | `Chamados_24x7` |
 
-### Encerrados pelo COI
+Parâmetros no topo do arquivo:
 
-Diferente das consultas acima, [`queries/consulta_coi_encerrados.sql`](queries/consulta_coi_encerrados.sql) não conta: ela **lista**. Devolve **uma linha por SDM** encerrado pelo COI, para conferência caso a caso.
+| Parâmetro | Uso |
+|---|---|
+| `@DataInicio` | início do período, inclusivo (horário do Brasil) |
+| `@DataFim` | fim do período, **exclusivo** |
+| `@Planilha` | `N'DCIM'` ou `N'Manutenção'` |
 
-A regra é a seguinte: um chamado é considerado encerrado pelo COI quando:
+O período seleciona os chamados pela **data de abertura**. Para um mês inteiro,
+use o dia 1 do mês e o dia 1 do mês seguinte, por exemplo `2026-07-01` e
+`2026-08-01`. Nunca use `23:59:59`.
 
-1. o fechamento cai no período analisado;
-2. o tipo é `I` (Incidente) ou `R` (Solicitação);
-3. o status é `CL` ou `CLUNRSLV`;
-4. o grupo atual do chamado é o grupo alvo da apuração.
+Em resumo:
 
-O período é parametrizável, com intervalo semiaberto (`>= início` e `< fim`), e a identidade do grupo é definida por UUID, não por nome.
+- **População:** chamados I/R abertos no período que passaram pelo grupo
+  `Fornecedores - Virtual`.
+- **DCIM:** rotinas registradas pela automação do SDM com IC `dcim`.
+  **Manutenção:** os demais.
+- **Regime:** TCU ou 24x7, pela combinação Tipo + Prioridade.
+- **Horário comercial (TCU):** 08:00–20:00, segunda a sexta, fora do
+  calendário TCU.
 
-### Painel
+A regra completa está em [`docs/virtual-calculation.md`](docs/virtual-calculation.md).
 
-A pasta `powerbi/` tem uma versão para cada uma das 12 consultas de `queries/`, com o mesmo nome acrescido de `_power_bi`. Cada uma aplica a mesma regra da sua referência, com período automático e saída num único resultado.
+Execute o arquivo **inteiro** na base `mdb`. A consulta só cria tabelas
+temporárias.
 
-A documentação das consultas do Power BI está em [`docs/powerbi-query.md`](docs/powerbi-query.md). Uma versão resumida, para o visual HTML Content do Power BI, está em [`docs/documentacao-powerbi-coi.html`](docs/documentacao-powerbi-coi.html).
+## Consultas do Power BI
+
+| Arquivo | Saída |
+|---|---|
+| [`powerbi/consulta_virtual_chamados_tcu_power_bi.sql`](powerbi/consulta_virtual_chamados_tcu_power_bi.sql) | `Chamados_TCU` das duas planilhas, com a coluna `Planilha` |
+| [`powerbi/consulta_virtual_chamados_24x7_power_bi.sql`](powerbi/consulta_virtual_chamados_24x7_power_bi.sql) | `Chamados_24x7` das duas planilhas, com a coluna `Planilha` |
+
+O período é automático: os últimos `@CoberturaMeses` meses fechados (padrão
+**12**) mais o mês corrente, por data de abertura.
+
+O bloco de cálculo (`MOTOR VIRTUAL`) é idêntico nos três arquivos. Mudanças de
+regra são feitas na referência e copiadas para os dois arquivos do Power BI.
+Detalhes em [`docs/powerbi-query.md`](docs/powerbi-query.md).
+
+## Manutenção anual
+
+O calendário TCU (feriados e pontos facultativos) fica no bloco `[2]` do motor,
+tabela `#Virt_Calendario`, e hoje cobre **2025 e 2026**. A cada ano novo, inclua
+as datas do ano no bloco da referência e copie o bloco para os dois arquivos do
+Power BI.
+
+## Como validar
+
+1. Rode a referência com o período e a planilha do mês.
+2. Compare, por SDM, com as abas `Chamados_TCU` e `Chamados_24x7` da planilha
+   correspondente.
+3. Diferenças de marco devem ser explicadas pelo `act_log` do chamado. A
+   consulta `support/consulta_logs_chamados_listados.sql` lista todos os logs
+   dos SDMs informados.
+4. Para o Power BI, rode as duas consultas com o mesmo período da referência.
+   Filtradas por `Planilha`, elas devem ter as mesmas linhas e os mesmos valores.
+
+Os totais das abas Cálculos e Financeiro saem da soma dos índices das duas abas
+de chamados (ver `docs/virtual-calculation.md`, seção 11).
 
 ## Consultas de apoio
 
-A pasta `support/` contém consultas auxiliares usadas durante análise e depuração.
-
 | Arquivo | Uso |
 |---|---|
-| `support/consulta_logs_chamados_listados.sql` | Lista todos os logs dos chamados informados |
-| `support/consulta_status_chamados.sql` | Lista os status cadastrados no SDM |
-| `support/consulta_status_hold.sql` | Mostra cada status e o flag `cr_stat.hold`, que indica se ele para o relógio do SLA |
-| `support/consulta_tipos_chamado.sql` | Lista os tipos de chamado e suas quantidades |
+| `support/consulta_logs_chamados_listados.sql` | todos os logs dos chamados informados |
+| `support/consulta_status_chamados.sql` | status cadastrados no SDM |
+| `support/consulta_status_hold.sql` | status e flag `cr_stat.hold` |
+| `support/consulta_tipos_chamado.sql` | tipos de chamado e quantidades |
 
-Essas consultas não calculam indicadores do COI. Elas servem para investigar chamados, conferir códigos e entender registros da base.
+Elas não calculam indicadores. Servem para investigar chamados e conferir códigos.
 
-## Como usar as consultas
+## Contexto de manutenção
 
-1. Abra o arquivo SQL do indicador desejado.
-2. Ajuste o período de apuração nos parâmetros de data.
-3. Execute o arquivo **inteiro** na base `mdb`, sem selecionar trecho.
-4. Exporte o resultado.
-5. Compare com os arquivos recebidos do fornecedor.
-
-Para conferir a regra de Registrados num período, rode `consulta_coi_registrados_validacao.sql`: todas as asserções devem voltar `SIM`.
-
-## Parâmetros comuns
-
-Os nomes variam por família de consulta:
-
-| Consultas | Início (inclusivo) | Fim (exclusivo) | Conferência |
-|---|---|---|---|
-| Registrados (`consulta_coi_registrados_*.sql`) | `@InicioBR` | `@FimBR` | — |
-| Encerrados | `@DataInicio` | `@DataFim` | `@MostrarDiagnostico` |
-| Pesquisa de satisfação dos encerrados | `@DataInicio` | `@DataFim` | `@MostrarConferencia` |
-| Power BI (`powerbi/*_power_bi.sql`) | automático, por `@PBI_QuantidadeMeses`; fixo em membros, contas técnicas e universo bruto | automático; fixo nas mesmas três | as da referência |
-
-- Todas as datas são horário do Brasil (GMT-3) e o intervalo é **semiaberto**: `>= início` e `< fim`. Para março inteiro, use início `2026-03-01 00:00:00` e fim `2026-04-01 00:00:00` — nunca `23:59:59`.
-- `@TransIniBR` e `@TransFimBR`, dentro do bloco canônico, marcam a janela da renomeação das filas do COI em 18/03/2026. **Não são parâmetros de período** e não devem ser alterados.
-
-## Fluxo de validação
-
-O fluxo esperado é:
-
-```text
-consulta SQL → resultado exportado → comparação com relatório do fornecedor → análise e reconciliação → ajuste ou confirmação da regra
-```
-
-As consultas de auditoria servem para confirmar a população e validar se os totais estão consistentes com a regra vigente.
-
-## Convenções do projeto
-
-- `queries/`: consultas executáveis relacionadas ao COI.
-- `powerbi/`: consultas de painel e consolidação.
-- `support/`: consultas auxiliares.
-- `project-context/`: Histórico Mestre do COI.
-
-Ao alterar uma regra de cálculo, atualize também a documentação correspondente e valide o impacto nos indicadores e no painel.
-
-## Histórico Mestre
-
-O histórico do projeto fica em
-[`project-context/COI-HISTORICO-CONTEXTO-MESTRE.md`](project-context/COI-HISTORICO-CONTEXTO-MESTRE.md).
-
-- Ele é **append-only**: cada intervenção vira uma seção nova, e seções antigas não são reescritas.
-- Trabalhos do COI atualizam **somente** este histórico. Decision e A2B mantêm o seu, nos respectivos repositórios.
-- As seções anteriores à separação dos repositórios foram herdadas do documento compartilhado da época em que os três núcleos viviam em `Queries`. Elas contêm registros de Decision e Protect4 e são mantidas como **legado histórico**, sem reescrita. Caminhos citados nelas (`coi/queries/`, `docs/project-context/`, …) descrevem a estrutura da época.
-- Alguns comentários de cabeçalho das consultas citam caminhos antigos. Eles fazem parte do bloco canônico, conferido por SHA256, e por isso não acompanham mudanças de pasta; os arquivos ficam em `queries/` e `powerbi/`.
+Decisões técnicas, validações feitas e divergências comprovadas das planilhas
+ficam em
+[`project-context/VIRTUAL-HISTORICO-CONTEXTO-MESTRE.md`](project-context/VIRTUAL-HISTORICO-CONTEXTO-MESTRE.md).

@@ -6,7 +6,7 @@ SET NOCOUNT ON;
 --
 -- Objetivo: retornar todos os registros da act_log relacionados aos chamados
 -- informados na tabela temporária #Alvo, sem filtrar por tipo de log, descrição,
--- status, transferência, grupo ou A2B.
+-- status, transferência ou grupo.
 --
 -- A consulta limita o resultado apenas aos chamados listados em #Alvo.
 --------------------------------------------------------------------------------
