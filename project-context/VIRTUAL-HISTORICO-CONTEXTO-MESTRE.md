@@ -11,13 +11,17 @@ Novas intervenções entram como seção nova no fim (seção 12), com data.
 
 ## 1. Objetivo
 
-Apurar, direto do SDM (`mdb`), FAIA e FARC da Virtual nas duas grades das
-planilhas mensais **Planilha_NMS_TCU** (`Chamados_TCU` e `Chamados_24x7`), que
-hoje são montadas à mão. Desde 2026-10-02 a contagem de tempo e o escopo seguem
-a arquitetura de posse da Decision; as planilhas continuam sendo a fonte de
-parâmetros, calendário, regime e separação DCIM x Manutenção (seção 12).
+Apurar, direto do SDM (`mdb`), FAIA e FARC da Virtual em duas grades por
+regime (`Chamados_TCU` e `Chamados_24x7`).
 
-São duas planilhas por mês:
+**Estado vigente:** o motor depende só de dados e regras do SDM. Escopo, posse e
+período seguem a arquitetura da Decision; parâmetros e calendário da Virtual
+ficam no próprio SQL. Não existe separação DCIM x Manutenção nem parâmetro
+`@Planilha` (seção 12, intervenção de 2026-10-02 "remoção da dependência de
+planilha").
+
+As planilhas manuais **Planilha_NMS_TCU** foram a base da engenharia reversa.
+Delas vieram os parâmetros, o calendário e o regime. Eram duas por mês:
 
 | Planilha | Conteúdo | Valor mensal |
 |---|---|---|
@@ -49,7 +53,7 @@ O nome do arquivo não marca o fim real do período: a planilha
 |---|---|---|
 | Escopo | I/R em status terminal (lista da Decision), grupo atual `Fornecedores - Virtual` e **encerrado na Virtual** (última transferência de grupo até o fechamento foi entrada na Virtual, ou nasceu nela sem transferência) | regra do escopo FAIA da Decision ([3.2] de `consulta_faia_farc.sql`); decisão de 2026-10-02 |
 | Período | pelo **fechamento** (`close_date`), semiaberto | regra da Decision ([1] de `consulta_faia_farc.sql`); decisão de 2026-10-02 |
-| DCIM | `log_agent` = automação (`Usuário de Serviço - ServiceDesk`) **e** IC `dcim` | 60/60; coincide com `%AFFECTED_RC=dcim` da mensagem de criação em toda a população de 2025–2026 (267 chamados) |
+| DCIM (removida da arquitetura em 2026-10-02) | `log_agent` = automação (`Usuário de Serviço - ServiceDesk`) **e** IC `dcim` | 60/60; coincide com `%AFFECTED_RC=dcim` da mensagem de criação em toda a população de 2025–2026 (267 chamados) |
 | Regime | Parâmetros por Tipo + Prioridade (P1/P2 = 24x7) | nenhum campo do SDM traz o regime |
 | Abertura | `open_date` | exato nas linhas não digitadas à mão |
 | Início | 1ª mudança de status (ST/RE), dentro de uma passagem pela Virtual, para status fora da fila (`OP`, `REOP`) | exato em todas as linhas não digitadas; 1647942 vai direto para *Agendado* |
@@ -61,7 +65,7 @@ O nome do arquivo não marca o fim real do período: a planilha
 | Posse | relógio começa na 1ª entrada na Virtual (abertura, se nasceu nela); saídas pausam, reentradas reativam, janelas somadas | janelas de posse da Decision ([8.1]); decisão de 2026-10-02 |
 | Fechamento | `Data/Hora Fechamento` = `close_date` (= evento CL, ±1 s) | 265 chamados do escopo com CL: 258 no mesmo segundo, 7 com 1 s de diferença de gravação |
 | Formato | 10 durações em texto `[h]:mm:ss`; cálculo em segundos; fatores e índices numéricos | igual às planilhas |
-| Saída | uma consulta de referência com `@Planilha` e dois result sets de 37 colunas (blocos A, B e C); Power BI em dois arquivos, um por aba, mais `Planilha` | motor único, bloco idêntico nos três arquivos |
+| Saída | uma consulta de referência com dois result sets de 37 colunas (blocos A, B e C), um por regime; Power BI em dois arquivos, um por regime, com as mesmas 37 colunas | motor único, bloco idêntico nos três arquivos |
 
 ## 4. Identidades no SDM
 
@@ -198,9 +202,9 @@ idêntico (maio: 23; 12 meses: 290).
 
 | Arquivo | Papel |
 |---|---|
-| `queries/consulta_virtual_faia_farc.sql` | referência: `@DataInicio`, `@DataFim`, `@Planilha`, dois result sets |
-| `powerbi/consulta_virtual_chamados_tcu_power_bi.sql` | Power BI, aba TCU, janela de `@CoberturaMeses` (12) |
-| `powerbi/consulta_virtual_chamados_24x7_power_bi.sql` | Power BI, aba 24x7 |
+| `queries/consulta_virtual_faia_farc.sql` | referência: `@DataInicio`, `@DataFim` (fechamento), dois result sets |
+| `powerbi/consulta_virtual_chamados_tcu_power_bi.sql` | Power BI, regime TCU, janela de `@CoberturaMeses` (12) |
+| `powerbi/consulta_virtual_chamados_24x7_power_bi.sql` | Power BI, regime 24x7 |
 | `docs/virtual-calculation.md` | regra vigente |
 | `docs/powerbi-query.md` | uso das consultas do Power BI |
 
@@ -312,3 +316,38 @@ SHA256 do motor (bloco com fim de linha LF):
   meses: 273 = 273, 0 diferenças.
 - SHA256 do motor (bloco com fim de linha LF):
   `18f5b90b90ea55b372dbc3fce6027468d4241ebfc37eab78a20dc0fd47d767c3`.
+
+### 2026-10-02 — remoção da dependência de planilha
+
+Decisão do usuário: o motor deve depender só do SDM. A separação DCIM x
+Manutenção e o parâmetro `@Planilha` serviram para reproduzir os dois arquivos
+Excel durante a engenharia reversa e saíram da arquitetura funcional.
+
+Motivação: com `@Planilha = N'DCIM'` como padrão, os chamados de Manutenção
+(1698592, 1701895, 1701911, 1703448, todos P3/TCU encerrados na Virtual em maio)
+passavam por todo o motor, mas eram cortados no SELECT final por
+`WHERE Planilha = @Planilha`.
+
+Mapeamento antes da remoção: a classificação só aparecia em `#Virt_Chamado`
+(CASE com `@AgenteAutomacao` e `@IC_DCIM`), em `#Virt_Marco` (cópia), em
+`#Virt_Saida` (coluna `Planilha`) e nos SELECTs finais (filtro na referência,
+coluna e ordenação no Power BI). Nenhum cálculo dependia dela: metas, fatores,
+regime, posse, FAIA e FARC usam Tipo + Prioridade e o histórico de grupo.
+
+Removidos: `@Planilha` e sua validação, `@AgenteAutomacao`, `@IC_DCIM`, a coluna
+derivada `planilha`, a coluna de saída `Planilha` e o filtro
+`WHERE Planilha = @Planilha`. Comentários que citavam abas das planilhas foram
+reescritos. O `Item de Configuração` continua na saída como dado do chamado.
+
+Validação:
+
+- maio/2026 (fechamento): Resultado 1 com 19 chamados (os 13 do antigo DCIM +
+  os 6 da antiga Manutenção, incluindo os quatro acima) e Resultado 2 com 0, em
+  uma execução;
+- fechamentos de 01/01/2025 a 02/10/2026: mesmos 273 SDMs do `eb6b490`,
+  0 diferenças nas 37 colunas mantidas;
+- Power BI 12 meses: mesmos 273 SDMs (261 TCU, 12 24x7), 37 colunas,
+  0 diferenças contra a versão publicada e contra a referência.
+
+SHA256 do motor (bloco com fim de linha LF):
+`37eb665ccc4ffcd0a7cefdf48427bb42830ab42c7d9848fa3093361449e36c73`.

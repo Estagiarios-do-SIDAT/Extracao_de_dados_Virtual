@@ -12,8 +12,8 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 --   Resultado 1 = Chamados_TCU
 --   Resultado 2 = Chamados_24x7
 --
--- @Planilha escolhe a planilha (DCIM ou Manutencao). O motor calcula sempre as
--- duas; o parametro so filtra a saida.
+-- Uma execucao devolve todos os chamados elegiveis: o Resultado 1 traz os do
+-- regime TCU e o Resultado 2 os do regime 24x7.
 --
 -- Regras (detalhe em docs/virtual-calculation.md):
 --   Periodo     FECHAMENTO do chamado (call_req.close_date) dentro de
@@ -22,9 +22,6 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 --               'Fornecedores - Virtual' e que ENCERROU na Virtual: nasceu nela
 --               sem transferencia de grupo, ou a ultima transferencia de grupo
 --               ate o fechamento foi uma entrada na Virtual.
---   Planilha    DCIM = registrado pela automacao do SDM (log_agent
---               'Usuario de Servico - ServiceDesk') com IC 'dcim'.
---               Manutencao = todos os demais.
 --   Regime      vem da tabela de parametros pela combinacao Tipo + Prioridade.
 --   Posse       janelas em que o chamado esteve no grupo Virtual, pela linha do
 --               tempo de transferencias de grupo. O relogio comeca na primeira
@@ -38,11 +35,11 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 --               status de atendimento aberto.
 --   Fechamento  call_req.close_date.
 --   Horario     TCU: 08:00-20:00, segunda a sexta, fora das datas com
---               Conta_SLA = 'N' no CALENDARIO_TCU. 24x7: tempo corrido.
+--               Conta_SLA = 'N' no calendario TCU (bloco [2]). 24x7: tempo
+--               corrido.
 --
--- Unidades: as 10 colunas de duracao "(h)" saem como texto [h]:mm:ss; o
--- calculo e feito em segundos. Indice = horas de excesso x fator, em pontos
--- percentuais (a aba Financeiro divide por 100).
+-- Unidades: as colunas de duracao saem como texto [h]:mm:ss; o calculo e
+-- feito em segundos. Indice = horas de excesso x fator, em pontos percentuais.
 --
 -- Execute o arquivo INTEIRO. Banco somente leitura: so cria tabelas #.
 --------------------------------------------------------------------------------
@@ -53,19 +50,9 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 DECLARE @DataInicio datetime2(0) = '2026-05-01 00:00:00';
 DECLARE @DataFim    datetime2(0) = '2026-06-01 00:00:00';
 
--- Planilha reproduzida: N'DCIM' ou N'Manutenção'.
-DECLARE @Planilha nvarchar(20) = N'DCIM';
-
-IF @Planilha NOT IN (N'DCIM', N'Manutenção')
-BEGIN
-    RAISERROR(N'@Planilha deve ser DCIM ou Manutenção.', 16, 1);
-    RETURN;
-END;
-
 -- >>> MOTOR VIRTUAL ------------------------------------------------------------
 -- Bloco identico nos tres arquivos (queries/ e powerbi/). Usa so @DataInicio e
--- @DataFim (janela de FECHAMENTO) e entrega #Virt_Saida com as duas planilhas e
--- os dois regimes.
+-- @DataFim (janela de FECHAMENTO) e entrega #Virt_Saida com os dois regimes.
 
 DECLARE @HorasBrasilParaUTC int = 3;
 DECLARE @Epoch datetime2(0) = '1970-01-01 00:00:00';
@@ -75,8 +62,6 @@ DECLARE @FimEpoch int = DATEDIFF(SECOND, @Epoch, DATEADD(HOUR, @HorasBrasilParaU
 -- Identidades por UUID; o nome do grupo e lido do cadastro porque o act_log
 -- registra a transferencia pelo nome.
 DECLARE @GrupoVirtual   varbinary(16) = 0x21679DF702A0EC478B1468D89E769836; -- Fornecedores - Virtual
-DECLARE @AgenteAutomacao varbinary(16) = 0xC6BB355348EE414B9EAA9870ADA5C9E5; -- Usuario de Servico - ServiceDesk
-DECLARE @IC_DCIM        varbinary(16) = 0xA39FE15C43351C41BA9478BA4000BAF5; -- IC 'dcim'
 DECLARE @GrupoVirtualNome nvarchar(200) =
     (SELECT LTRIM(RTRIM(c.last_name)) FROM dbo.ca_contact AS c WHERE c.contact_uuid = @GrupoVirtual);
 
@@ -85,7 +70,8 @@ DECLARE @HoraInicioComercial int = 8;
 DECLARE @HoraFimComercial    int = 20;
 
 --------------------------------------------------------------------------------
--- [1] Parametros (aba Parametros). Metas em horas.
+-- [1] Parametros da Virtual: metas (em horas), regime e fatores por Tipo +
+--     Prioridade.
 --------------------------------------------------------------------------------
 IF OBJECT_ID('tempdb..#Virt_Parametros') IS NOT NULL DROP TABLE #Virt_Parametros;
 CREATE TABLE #Virt_Parametros (
@@ -111,8 +97,8 @@ VALUES
     (N'Solicitação', 5, 12.00, 360, N'TCU',  0.4, 0.2);
 
 --------------------------------------------------------------------------------
--- [2] CALENDARIO_TCU (tabela tblCalendarioTCU). Conta_SLA = 'N': a data nao
---     tem horario comercial. Demais datas da tabela contam normalmente.
+-- [2] Calendario TCU: feriados e pontos facultativos. Conta_SLA = 'N': a data
+--     nao tem horario comercial. Demais datas da tabela contam normalmente.
 --------------------------------------------------------------------------------
 IF OBJECT_ID('tempdb..#Virt_Calendario') IS NOT NULL DROP TABLE #Virt_Calendario;
 CREATE TABLE #Virt_Calendario (
@@ -339,8 +325,6 @@ SELECT
     p.affected_rc,
     CASE p.[type] WHEN 'I' THEN N'Incidente' WHEN 'R' THEN N'Solicitação' END AS tipo,
     p.priority AS prioridade,
-    CASE WHEN p.log_agent = @AgenteAutomacao AND p.affected_rc = @IC_DCIM
-         THEN N'DCIM' ELSE N'Manutenção' END AS planilha,
     p.open_date AS abertura_epoch,
     ent.entrada_epoch,
     ini.inicio_epoch,
@@ -418,7 +402,6 @@ SELECT
     c.affected_rc,
     c.tipo,
     c.prioridade,
-    c.planilha,
     pr.Regime AS regime,
     DATEADD(HOUR, -@HorasBrasilParaUTC, DATEADD(SECOND, c.abertura_epoch,   @Epoch)) AS abertura,
     DATEADD(HOUR, -@HorasBrasilParaUTC, DATEADD(SECOND, c.entrada_epoch,    @Epoch)) AS entrada,
@@ -632,13 +615,12 @@ CREATE UNIQUE CLUSTERED INDEX IX_Virt_Calculo ON #Virt_Calculo (id);
 -- [12] Linhas finais.
 --      Bloco A: identificacao e datas. Bloco B: as 15 colunas de apuracao da
 --      Virtual. Bloco C: colunas de contexto no padrao da Decision.
---      As duracoes saem como texto [h]:mm:ss, igual as planilhas (horas
---      acima de 24 sem virar o dia). A formatacao e feita so aqui, depois do
+--      As duracoes saem como texto [h]:mm:ss (horas acima de 24 sem virar o
+--      dia). A formatacao e feita so aqui, depois do
 --      calculo; fatores e indices continuam numericos.
 --------------------------------------------------------------------------------
 IF OBJECT_ID('tempdb..#Virt_Saida') IS NOT NULL DROP TABLE #Virt_Saida;
 SELECT
-    m.planilha AS Planilha,
     CASE WHEN m.regime = N'24x7' THEN N'Chamados_24x7' ELSE N'Chamados_TCU' END AS Aba,
     -- Bloco A
     m.ref_num AS [ID Chamado],
@@ -783,8 +765,7 @@ SELECT
     [Justificativa],
     [Meta Atendimento]
 FROM #Virt_Saida
-WHERE Planilha = @Planilha
-  AND Aba = N'Chamados_TCU'
+WHERE Aba = N'Chamados_TCU'
 ORDER BY [Data/Hora Fechamento], [ID Chamado];
 
 --------------------------------------------------------------------------------
@@ -829,6 +810,5 @@ SELECT
     [Justificativa],
     [Meta Atendimento]
 FROM #Virt_Saida
-WHERE Planilha = @Planilha
-  AND Aba = N'Chamados_24x7'
+WHERE Aba = N'Chamados_24x7'
 ORDER BY [Data/Hora Fechamento], [ID Chamado];

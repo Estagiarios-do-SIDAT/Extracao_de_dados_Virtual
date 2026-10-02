@@ -3,11 +3,10 @@
 Consultas SQL e documentação da apuração de **FAIA** e **FARC** do fornecedor
 **Virtual**, a partir da base do **CA Service Desk Manager** (`mdb`).
 
-A consulta entrega, direto do SDM, as duas grades das planilhas mensais
-**Planilha_NMS_TCU** da Virtual, `Chamados_TCU` e `Chamados_24x7`, para as duas
-planilhas, **DCIM** e **Manutenção**, cada uma com seu valor mensal contratado.
-A contagem de tempo segue a arquitetura de posse da Decision; metas, fatores,
-regime e calendário são os da Virtual.
+A consulta lê só o SDM e entrega os chamados da Virtual em duas grades, por
+regime: `Chamados_TCU` e `Chamados_24x7`. A contagem de tempo segue a
+arquitetura de posse da Decision; metas, fatores, regime e calendário são os da
+Virtual e ficam no próprio SQL. Não há dependência de arquivo externo.
 
 Este repositório atende **somente a Virtual**. Decision, A2B/Protect4 e COI têm
 repositórios próprios.
@@ -35,10 +34,10 @@ repositórios próprios.
 [`queries/consulta_virtual_faia_farc.sql`](queries/consulta_virtual_faia_farc.sql)
 devolve dois resultados, com as mesmas 37 colunas:
 
-| Resultado | Aba |
+| Resultado | Conteúdo |
 |---|---|
-| 1 | `Chamados_TCU` |
-| 2 | `Chamados_24x7` |
+| 1 | `Chamados_TCU`: todos os chamados elegíveis do regime TCU |
+| 2 | `Chamados_24x7`: todos os chamados elegíveis do regime 24x7 |
 
 Parâmetros no topo do arquivo:
 
@@ -46,7 +45,6 @@ Parâmetros no topo do arquivo:
 |---|---|
 | `@DataInicio` | início do período de fechamento, inclusivo (horário do Brasil) |
 | `@DataFim` | fim do período de fechamento, **exclusivo** |
-| `@Planilha` | `N'DCIM'` ou `N'Manutenção'` |
 
 O período seleciona os chamados pela **data de fechamento**. Para um mês inteiro,
 use o dia 1 do mês e o dia 1 do mês seguinte, por exemplo `2026-07-01` e
@@ -58,14 +56,14 @@ Em resumo:
   atual `Fornecedores - Virtual` e que encerraram na Virtual (última
   transferência de grupo foi uma entrada na Virtual, ou nasceram nela sem
   transferência).
-- **DCIM:** rotinas registradas pela automação do SDM com IC `dcim`.
-  **Manutenção:** os demais.
 - **Regime:** TCU ou 24x7, pela combinação Tipo + Prioridade.
 - **Posse:** o relógio começa na primeira entrada na Virtual (na abertura, se
   o chamado nasceu nela), para nas saídas e volta nas reentradas; todas as
   janelas de posse são somadas.
 - **Colunas:** identificação e datas (com `Data/Hora Fechamento`), as 15
-  colunas de apuração da Virtual e colunas de contexto no padrão da Decision.
+  colunas de apuração da Virtual e colunas de contexto no padrão da Decision,
+  entre elas `Item de Configuração` e `Categoria`, que identificam o serviço ou
+  o objeto atendido.
   `Tempo suspenso` vale `0:00:00`, porque a regra da Virtual não tem status
   que suspendam a contagem. As durações saem como `[h]:mm:ss`; fatores e
   índices são numéricos e calculados em segundos.
@@ -81,8 +79,8 @@ temporárias.
 
 | Arquivo | Saída |
 |---|---|
-| [`powerbi/consulta_virtual_chamados_tcu_power_bi.sql`](powerbi/consulta_virtual_chamados_tcu_power_bi.sql) | `Chamados_TCU` das duas planilhas, com a coluna `Planilha` |
-| [`powerbi/consulta_virtual_chamados_24x7_power_bi.sql`](powerbi/consulta_virtual_chamados_24x7_power_bi.sql) | `Chamados_24x7` das duas planilhas, com a coluna `Planilha` |
+| [`powerbi/consulta_virtual_chamados_tcu_power_bi.sql`](powerbi/consulta_virtual_chamados_tcu_power_bi.sql) | `Chamados_TCU`, com as mesmas 37 colunas da referência |
+| [`powerbi/consulta_virtual_chamados_24x7_power_bi.sql`](powerbi/consulta_virtual_chamados_24x7_power_bi.sql) | `Chamados_24x7`, com as mesmas 37 colunas da referência |
 
 O período é automático: os últimos `@CoberturaMeses` meses (padrão **12**) mais
 o mês corrente, por data de fechamento.
@@ -100,19 +98,16 @@ Power BI.
 
 ## Como validar
 
-1. Rode a referência com o período de fechamento e a planilha do mês.
+1. Rode a referência com o período de fechamento do mês.
 2. Confira, por SDM, os marcos (abertura, entrada na Virtual, início,
    resolução, fechamento) e as janelas de posse contra o `act_log` do chamado.
    A consulta `support/consulta_logs_chamados_listados.sql` lista todos os
    logs dos SDMs informados.
-3. Contra as planilhas manuais, confira tipo, prioridade, regime, metas e
-   fatores. Os tempos diferem delas por regra (ver
-   `docs/virtual-calculation.md`, seção 12).
-4. Para o Power BI, rode as duas consultas com o mesmo período da referência.
-   Filtradas por `Planilha`, elas devem ter as mesmas linhas e os mesmos valores.
+3. Para o Power BI, rode as duas consultas com o mesmo período da referência.
+   Elas devem ter as mesmas linhas e os mesmos valores dos dois resultados.
 
-Os totais das abas Cálculos e Financeiro saem da soma dos índices das duas abas
-de chamados (ver `docs/virtual-calculation.md`, seção 11).
+O total de FAIA ou FARC de um período é a soma de `Indice FAIA` ou
+`Indice FARC` dos dois resultados (ver `docs/virtual-calculation.md`, seção 9).
 
 ## Consultas de apoio
 
@@ -127,6 +122,6 @@ Elas não calculam indicadores. Servem para investigar chamados e conferir códi
 
 ## Contexto de manutenção
 
-Decisões técnicas, validações feitas e divergências comprovadas das planilhas
-ficam em
+Decisões técnicas, validações feitas e o histórico da engenharia reversa das
+planilhas manuais ficam em
 [`project-context/VIRTUAL-HISTORICO-CONTEXTO-MESTRE.md`](project-context/VIRTUAL-HISTORICO-CONTEXTO-MESTRE.md).

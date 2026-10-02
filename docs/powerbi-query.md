@@ -9,8 +9,8 @@ Fonte de dados do painel de FAIA e FARC da Virtual. A regra de cálculo está em
 
 | Arquivo | Conteúdo |
 |---|---|
-| `powerbi/consulta_virtual_chamados_tcu_power_bi.sql` | aba `Chamados_TCU`, DCIM e Manutenção juntos |
-| `powerbi/consulta_virtual_chamados_24x7_power_bi.sql` | aba `Chamados_24x7`, DCIM e Manutenção juntos |
+| `powerbi/consulta_virtual_chamados_tcu_power_bi.sql` | `Chamados_TCU`: todos os chamados elegíveis do regime TCU |
+| `powerbi/consulta_virtual_chamados_24x7_power_bi.sql` | `Chamados_24x7`: todos os chamados elegíveis do regime 24x7 |
 
 Cada arquivo devolve **um único resultado**, como o Power BI espera.
 
@@ -29,18 +29,18 @@ O bloco é **idêntico byte a byte** nos três arquivos. SHA256 do bloco, com fi
 linha LF:
 
 ```text
-18f5b90b90ea55b372dbc3fce6027468d4241ebfc37eab78a20dc0fd47d767c3
+37eb665ccc4ffcd0a7cefdf48427bb42830ab42c7d9848fa3093361449e36c73
 ```
 
 Ele recebe só `@DataInicio` e `@DataFim` (janela de fechamento) e entrega a
-tabela `#Virt_Saida`, com as duas planilhas e os dois regimes. Os arquivos
-diferem apenas em:
+tabela `#Virt_Saida`, com os dois regimes. Os arquivos diferem apenas em:
 
 | | Referência | Power BI |
 |---|---|---|
 | Período | `@DataInicio` / `@DataFim` digitados | calculado a partir de hoje (seção 4) |
-| Planilha | `@Planilha` escolhe DCIM ou Manutenção | as duas, com a coluna `Planilha` |
-| Saída | dois resultados (TCU e 24x7) | um arquivo por aba |
+| Saída | dois resultados (TCU e 24x7) | um arquivo por regime |
+
+As três consultas têm as mesmas 37 colunas, na mesma ordem.
 
 Qualquer mudança de regra é feita no bloco da referência e copiada para os dois
 arquivos do Power BI. Depois da cópia, os três blocos devem continuar idênticos.
@@ -51,7 +51,7 @@ arquivos do Power BI. Depois da cópia, os três blocos devem continuar idêntic
 2. Servidor do SDM, banco `mdb`, modo **Importação**.
 3. Em *Opções avançadas → Instrução SQL*, colar o arquivo **inteiro**.
 4. Deixar *Incluir colunas de relação* desmarcado.
-5. Repetir para o outro arquivo. São duas consultas no modelo, uma por aba.
+5. Repetir para o outro arquivo. São duas consultas no modelo, uma por regime.
 
 ## 4. Período
 
@@ -76,7 +76,7 @@ Volume e tempo de referência (janela de 01/10/2025 a 02/10/2026): 273 chamados
 
 ## 5. Saída
 
-As 37 colunas da referência, na mesma ordem, mais `Planilha` no final (38):
+As mesmas 37 colunas da referência, na mesma ordem:
 
 | # | Coluna | Unidade |
 |---|---|---|
@@ -117,13 +117,12 @@ As 37 colunas da referência, na mesma ordem, mais `Planilha` no final (38):
 | 35 | Acordo Qualidade | `-` |
 | 36 | Justificativa | `-` |
 | 37 | Meta Atendimento | `Atende` / `Não Atende` / `N/A` |
-| 38 | Planilha | `DCIM` / `Manutenção` |
 
 Uma linha por chamado. Os blocos e a origem de cada coluna estão em
-[virtual-calculation.md, seção 10](virtual-calculation.md#10-mapa-das-colunas).
+[virtual-calculation.md, seção 8](virtual-calculation.md#8-mapa-das-colunas).
 
 As durações (as 10 do bloco B e `Tempo suspenso`, que vale sempre `0:00:00`)
-saem como texto `[h]:mm:ss`, igual às planilhas: horas sem limite
+saem como texto `[h]:mm:ss`: horas sem limite
 de 24 (`73:21:56`), zero como `0:00:00`. Como são texto, o Power BI não as soma;
 os totais de FAIA e FARC vêm das colunas `Indice FAIA` e `Indice FARC`, que são
 numéricas e calculadas em segundos dentro do motor, antes da formatação. Não há
@@ -131,18 +130,17 @@ coluna numérica auxiliar de duração na saída.
 
 Os tempos contam só as janelas de posse da Virtual, a partir da primeira
 entrada no grupo (ver
-[virtual-calculation.md, seção 9.1](virtual-calculation.md#91-janelas-de-posse-da-virtual)).
+[virtual-calculation.md, seção 7.1](virtual-calculation.md#71-janelas-de-posse-da-virtual)).
 
-Para chegar aos totais da aba Cálculos de uma planilha em um mês, filtre
-`Planilha` e o mês de `Data/Hora Fechamento` e some `Indice FAIA` e
-`Indice FARC` nas duas consultas. O Financeiro aplica `Total / 100` sobre o
-valor mensal da planilha: R$ 16.000,00 no DCIM e R$ 22.000,00 na Manutenção.
+Os chamados vêm todos juntos. Para separar por serviço ou objeto atendido,
+use os campos do próprio chamado, como `Item de Configuração` e `Categoria`.
+Para o total de FAIA ou FARC de um mês, some `Indice FAIA` ou `Indice FARC`
+das duas consultas, filtrando o mês de `Data/Hora Fechamento`.
 
 ## 6. Conferência
 
-Com o mesmo período, a soma das duas consultas do Power BI filtrada por
-`Planilha` tem as mesmas linhas e os mesmos valores dos dois resultados da
-referência rodada com `@Planilha` correspondente. Conferido com fechamento em
+Com o mesmo período, as duas consultas do Power BI têm as mesmas linhas e os
+mesmos valores dos dois resultados da referência. Conferido com fechamento em
 maio/2026 (19 chamados) e na janela de 01/10/2025 a 02/10/2026 (273 chamados):
 nenhuma diferença nas 37 colunas.
 
@@ -155,7 +153,7 @@ Para conferir, troque no arquivo do Power BI as duas linhas que calculam
 - O calendário embutido vai até 31/12/2026 e precisa ser atualizado a cada ano
   no bloco `[2]` do motor, na referência, e depois copiado para os dois
   arquivos do Power BI (ver
-  [virtual-calculation.md, seção 13](virtual-calculation.md#13-cuidados-e-limitações)).
+  [virtual-calculation.md, seção 10](virtual-calculation.md#10-cuidados-e-limitações)).
   Com a janela de 12 meses, a partir de janeiro de 2027 parte da janela fica
   fora do calendário até essa atualização.
 - Só entram chamados já fechados. Um chamado resolvido e ainda não fechado

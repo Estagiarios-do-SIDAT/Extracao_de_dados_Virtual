@@ -20,8 +20,8 @@ DECLARE @CoberturaMeses int = 12;
 -- Mesma regra de queries/consulta_virtual_faia_farc.sql: o bloco MOTOR VIRTUAL
 -- abaixo e uma copia identica do bloco da consulta de referencia. Mudam so:
 --   - o periodo, calculado a partir de hoje (abaixo);
---   - a saida: um unico resultado, com DCIM e Manutencao juntos e a coluna
---     [Planilha] no final para separa-los.
+--   - a saida: um unico resultado, so com o regime deste arquivo, com as
+--     mesmas colunas da referencia.
 --
 -- Uso: conector SQL Server, banco mdb, modo Importacao, colar o arquivo
 -- inteiro em 'Instrucao SQL'.
@@ -37,8 +37,7 @@ DECLARE @DataFim datetime2(0) = CONVERT(datetime2(0), DATEADD(DAY, 1, @HojeBrasi
 
 -- >>> MOTOR VIRTUAL ------------------------------------------------------------
 -- Bloco identico nos tres arquivos (queries/ e powerbi/). Usa so @DataInicio e
--- @DataFim (janela de FECHAMENTO) e entrega #Virt_Saida com as duas planilhas e
--- os dois regimes.
+-- @DataFim (janela de FECHAMENTO) e entrega #Virt_Saida com os dois regimes.
 
 DECLARE @HorasBrasilParaUTC int = 3;
 DECLARE @Epoch datetime2(0) = '1970-01-01 00:00:00';
@@ -48,8 +47,6 @@ DECLARE @FimEpoch int = DATEDIFF(SECOND, @Epoch, DATEADD(HOUR, @HorasBrasilParaU
 -- Identidades por UUID; o nome do grupo e lido do cadastro porque o act_log
 -- registra a transferencia pelo nome.
 DECLARE @GrupoVirtual   varbinary(16) = 0x21679DF702A0EC478B1468D89E769836; -- Fornecedores - Virtual
-DECLARE @AgenteAutomacao varbinary(16) = 0xC6BB355348EE414B9EAA9870ADA5C9E5; -- Usuario de Servico - ServiceDesk
-DECLARE @IC_DCIM        varbinary(16) = 0xA39FE15C43351C41BA9478BA4000BAF5; -- IC 'dcim'
 DECLARE @GrupoVirtualNome nvarchar(200) =
     (SELECT LTRIM(RTRIM(c.last_name)) FROM dbo.ca_contact AS c WHERE c.contact_uuid = @GrupoVirtual);
 
@@ -58,7 +55,8 @@ DECLARE @HoraInicioComercial int = 8;
 DECLARE @HoraFimComercial    int = 20;
 
 --------------------------------------------------------------------------------
--- [1] Parametros (aba Parametros). Metas em horas.
+-- [1] Parametros da Virtual: metas (em horas), regime e fatores por Tipo +
+--     Prioridade.
 --------------------------------------------------------------------------------
 IF OBJECT_ID('tempdb..#Virt_Parametros') IS NOT NULL DROP TABLE #Virt_Parametros;
 CREATE TABLE #Virt_Parametros (
@@ -84,8 +82,8 @@ VALUES
     (N'Solicitação', 5, 12.00, 360, N'TCU',  0.4, 0.2);
 
 --------------------------------------------------------------------------------
--- [2] CALENDARIO_TCU (tabela tblCalendarioTCU). Conta_SLA = 'N': a data nao
---     tem horario comercial. Demais datas da tabela contam normalmente.
+-- [2] Calendario TCU: feriados e pontos facultativos. Conta_SLA = 'N': a data
+--     nao tem horario comercial. Demais datas da tabela contam normalmente.
 --------------------------------------------------------------------------------
 IF OBJECT_ID('tempdb..#Virt_Calendario') IS NOT NULL DROP TABLE #Virt_Calendario;
 CREATE TABLE #Virt_Calendario (
@@ -312,8 +310,6 @@ SELECT
     p.affected_rc,
     CASE p.[type] WHEN 'I' THEN N'Incidente' WHEN 'R' THEN N'Solicitação' END AS tipo,
     p.priority AS prioridade,
-    CASE WHEN p.log_agent = @AgenteAutomacao AND p.affected_rc = @IC_DCIM
-         THEN N'DCIM' ELSE N'Manutenção' END AS planilha,
     p.open_date AS abertura_epoch,
     ent.entrada_epoch,
     ini.inicio_epoch,
@@ -391,7 +387,6 @@ SELECT
     c.affected_rc,
     c.tipo,
     c.prioridade,
-    c.planilha,
     pr.Regime AS regime,
     DATEADD(HOUR, -@HorasBrasilParaUTC, DATEADD(SECOND, c.abertura_epoch,   @Epoch)) AS abertura,
     DATEADD(HOUR, -@HorasBrasilParaUTC, DATEADD(SECOND, c.entrada_epoch,    @Epoch)) AS entrada,
@@ -605,13 +600,12 @@ CREATE UNIQUE CLUSTERED INDEX IX_Virt_Calculo ON #Virt_Calculo (id);
 -- [12] Linhas finais.
 --      Bloco A: identificacao e datas. Bloco B: as 15 colunas de apuracao da
 --      Virtual. Bloco C: colunas de contexto no padrao da Decision.
---      As duracoes saem como texto [h]:mm:ss, igual as planilhas (horas
---      acima de 24 sem virar o dia). A formatacao e feita so aqui, depois do
+--      As duracoes saem como texto [h]:mm:ss (horas acima de 24 sem virar o
+--      dia). A formatacao e feita so aqui, depois do
 --      calculo; fatores e indices continuam numericos.
 --------------------------------------------------------------------------------
 IF OBJECT_ID('tempdb..#Virt_Saida') IS NOT NULL DROP TABLE #Virt_Saida;
 SELECT
-    m.planilha AS Planilha,
     CASE WHEN m.regime = N'24x7' THEN N'Chamados_24x7' ELSE N'Chamados_TCU' END AS Aba,
     -- Bloco A
     m.ref_num AS [ID Chamado],
@@ -715,7 +709,7 @@ CROSS APPLY (
 -- <<< MOTOR VIRTUAL ------------------------------------------------------------
 
 --------------------------------------------------------------------------------
--- Resultado unico = Chamados_24x7 (DCIM e Manutencao)
+-- Resultado unico = Chamados_24x7
 --------------------------------------------------------------------------------
 SELECT
     [ID Chamado],
@@ -754,8 +748,7 @@ SELECT
     [Acordo Prazo],
     [Acordo Qualidade],
     [Justificativa],
-    [Meta Atendimento],
-    [Planilha]
+    [Meta Atendimento]
 FROM #Virt_Saida
 WHERE Aba = N'Chamados_24x7'
-ORDER BY [Planilha], [Data/Hora Fechamento], [ID Chamado];
+ORDER BY [Data/Hora Fechamento], [ID Chamado];
