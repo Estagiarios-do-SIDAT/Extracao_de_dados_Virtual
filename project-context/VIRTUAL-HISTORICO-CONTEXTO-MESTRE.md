@@ -11,8 +11,11 @@ Novas intervenções entram como seção nova no fim (seção 12), com data.
 
 ## 1. Objetivo
 
-Reproduzir, direto do SDM (`mdb`), as abas `Chamados_TCU` e `Chamados_24x7` das
-planilhas mensais **Planilha_NMS_TCU** da Virtual, que hoje são montadas à mão.
+Apurar, direto do SDM (`mdb`), FAIA e FARC da Virtual nas duas grades das
+planilhas mensais **Planilha_NMS_TCU** (`Chamados_TCU` e `Chamados_24x7`), que
+hoje são montadas à mão. Desde 2026-10-02 a contagem de tempo e o escopo seguem
+a arquitetura de posse da Decision; as planilhas continuam sendo a fonte de
+parâmetros, calendário, regime e separação DCIM x Manutenção (seção 12).
 
 São duas planilhas por mês:
 
@@ -44,8 +47,8 @@ O nome do arquivo não marca o fim real do período: a planilha
 
 | Tema | Decisão | Base |
 |---|---|---|
-| População | I/R aberto no período, com passagem pelo grupo `Fornecedores - Virtual` (TR para o grupo ou nascido nele), exceto Não resolvido/Cancelado/Cancelada | 60/60 linhas das planilhas; nenhuma linha aberta fora do próprio ciclo |
-| Período | pela **abertura**; aberto no período e resolvido depois **entra** | seção 6 |
+| Escopo | I/R em status terminal (lista da Decision), grupo atual `Fornecedores - Virtual` e **encerrado na Virtual** (última transferência de grupo até o fechamento foi entrada na Virtual, ou nasceu nela sem transferência) | regra do escopo FAIA da Decision ([3.2] de `consulta_faia_farc.sql`); decisão de 2026-10-02 |
+| Período | pelo **fechamento** (`close_date`), semiaberto | regra da Decision ([1] de `consulta_faia_farc.sql`); decisão de 2026-10-02 |
 | DCIM | `log_agent` = automação (`Usuário de Serviço - ServiceDesk`) **e** IC `dcim` | 60/60; coincide com `%AFFECTED_RC=dcim` da mensagem de criação em toda a população de 2025–2026 (267 chamados) |
 | Regime | Parâmetros por Tipo + Prioridade (P1/P2 = 24x7) | nenhum campo do SDM traz o regime |
 | Abertura | `open_date` | exato nas linhas não digitadas à mão |
@@ -55,7 +58,10 @@ O nome do arquivo não marca o fim real do período: a planilha
 | 24x7 | comerciais = 0; excesso sobre tempo corrido | planilhas de 2026; FARC real em 1719182 (28,218) |
 | Índice FAIA | horas × fator (com ×24) | 1ª linha de todas as abas, FARC inteiro, FAIA real de 1714513 (3,226) |
 | Status de espera | não suspendem a contagem | as fórmulas só usam as três datas |
-| Saída | uma consulta de referência com `@Planilha` e dois result sets; Power BI em dois arquivos, um por aba | motor único, bloco idêntico nos três arquivos |
+| Posse | relógio começa na 1ª entrada na Virtual (abertura, se nasceu nela); saídas pausam, reentradas reativam, janelas somadas | janelas de posse da Decision ([8.1]); decisão de 2026-10-02 |
+| Fechamento | `Data/Hora Fechamento` = `close_date` (= evento CL, ±1 s) | 265 chamados do escopo com CL: 258 no mesmo segundo, 7 com 1 s de diferença de gravação |
+| Formato | 10 durações em texto `[h]:mm:ss`; cálculo em segundos; fatores e índices numéricos | igual às planilhas |
+| Saída | uma consulta de referência com `@Planilha` e dois result sets de 37 colunas (blocos A, B e C); Power BI em dois arquivos, um por aba, mais `Planilha` | motor único, bloco idêntico nos três arquivos |
 
 ## 4. Identidades no SDM
 
@@ -123,11 +129,13 @@ ciclo de 2025. Pela consulta: horas comerciais de resolução 22,44 h contra met
 de 60 h, FARC 0. Parando na saída da Virtual seriam 19,56 h; parando no RAT,
 14,90 h. Nenhuma alternativa muda o resultado.
 
-Decisão: **mantido na apuração** (regra A), sem corte na saída. Um caso isolado
-não sustenta nova regra. A ausência na planilha é compatível tanto com exclusão
-deliberada quanto com omissão, que também ocorre em maio e julho. Pendência:
-confirmar com a fiscalização se chamado devolvido ao COI antes da resolução
-conta para a Virtual.
+Decisão de 2026-10-01: mantido na apuração, sem corte na saída.
+
+**Decisão vigente (2026-10-02):** o chamado continua na apuração, mas o relógio
+da Virtual **para na saída** (regra geral da janela de responsabilidade,
+seção 3). Janela atribuída: 25/09 14:48:51 → 29/09 10:22:28. Resultado:
+Tsol 91:33:37, horas comerciais de resolução 19:33:37, FARC 0 (antes: 94:26:13,
+22:26:13, FARC 0).
 
 ## 8. Validação
 
@@ -158,6 +166,16 @@ interpretados, 12 no 24x7, 25 com FARC > 0, 7 com FAIA > 0.
 chamados) e na janela de 12 meses (01/10/2025–01/10/2026, 287 chamados). Tempo:
 cerca de 30–40 s por arquivo.
 
+**Janela de responsabilidade (2026-10-02).** Na execução de um ano, 250 dos 262
+chamados ficaram idênticos (tempos ao segundo e índices). Mudaram só os 12
+chamados com saída da Virtual: 1644738 (resolvido fora) e 11 com mais de uma
+passagem (1644896, 1645103, 1651174, 1675872, 1693493, 1698592, 1701511,
+1702424, 1709362, 1712105, 1719182). Os valores novos foram conferidos com um
+cálculo independente em Python (12/12). Índices alterados: FARC de 1644896
+(3,485 → 3,483), 1645103 (2,088 → 2,085), 1651174 (410,483 → 410,469), 1709362
+(12,106 → 0) e 1719182 (28,218 → 28,127). Power BI x referência continuou
+idêntico (maio: 23; 12 meses: 290).
+
 ## 9. Divergências comprovadas das planilhas
 
 | Divergência | Ocorrências | Tratamento |
@@ -174,6 +192,7 @@ cerca de 30–40 s por arquivo.
 | Vínculo externo `[1]Parâmetros` (arquivo de março/2026) | 24x7 de maio e julho, DCIM T2/V2 de maio | Parâmetros |
 | Calendário de 2025 com 26/11 no lugar de 26/12 | 1650826, 1652305 (−12 h na planilha) | calendário atual |
 | 24x7 de 2025 com contagem comercial | 1647146 | tempo corrido (2026) |
+| Tempo fora da Virtual contado | 1698592, 1719182, 1644896, 1645103 | janela de responsabilidade |
 
 ## 10. Arquivos
 
@@ -191,11 +210,10 @@ intervenção mais recente na seção 12.
 
 ## 11. Pendências
 
-1. Chamado devolvido ao COI antes da resolução (seção 7): confirmar com a
-   fiscalização.
-2. Planilhas de maio/2026: confirmar com quem as monta que os 11 chamados ausentes
-   foram omissão.
-3. Calendário de 2027: incluir quando as datas forem publicadas.
+1. Planilhas de maio/2026: confirmar com quem as monta que os 11 chamados
+   ausentes foram omissão. Os 11 foram resolvidos dentro da Virtual. Não afeta
+   a consulta, que não usa a planilha como critério de escopo.
+2. Calendário de 2027: incluir quando as datas forem publicadas.
 
 ## 12. Intervenções
 
@@ -212,3 +230,85 @@ intervenção mais recente na seção 12.
   cópia do histórico do COI, sem conteúdo aplicável.
 - SHA256 do motor (bloco com fim de linha LF):
   `8a6054a46d3059603bd538475893be49777fc44ae56a395be34993df8404dae9`.
+
+### 2026-10-02 — janela de responsabilidade e formato [h]:mm:ss
+
+- Os 11 chamados de maio ausentes da planilha foram todos resolvidos dentro da
+  Virtual (último grupo antes da resolução = `Fornecedores - Virtual`).
+- Referência metodológica: A2B e Decision contam só o tempo de posse do grupo,
+  com o relógio a partir da entrada e soma de todas as janelas (reposse). Para a
+  Virtual, por decisão do usuário, o relógio continua partindo da **abertura**,
+  como nas planilhas; o que se adota da A2B/Decision é o desconto do tempo fora
+  do grupo depois da primeira entrada e a soma das passagens. A alternativa
+  (relógio a partir da entrada) mudaria Tini/Tsol das 60 linhas validadas e
+  zeraria o FAIA de 1714513 (3,226), cobrado na planilha de julho.
+- Motor: novos blocos `#Virt_LinhaGrupo`, `#Virt_Janela`, `#Virt_Trecho` e
+  `#Virt_Calculo`; tempos somados por trecho. Início, Resolução, população,
+  DCIM/Manutenção e regime não mudaram.
+- As 10 durações saem como `[h]:mm:ss`; o índice é calculado dos segundos, com o
+  excesso arredondado em 6 casas, como antes.
+- SHA256 do motor (bloco com fim de linha LF):
+  `bbd85c126761c2426dcf640a8ba9aff5f200f3f58881e94ccc3554585b55bfb0`.
+
+### 2026-10-02 — arquitetura de posse da Decision, período por fechamento e schema ampliado
+
+Decisão do usuário: a planilha deixa de ser o árbitro da lógica temporal. A
+Virtual passa a seguir o modelo de posse da Decision, com os parâmetros, o
+calendário e o horário comercial próprios.
+
+Modelo lido no SQL vigente da Decision (`queries/consulta_faia_farc.sql`):
+
+| Tema | Decision | Virtual |
+|---|---|---|
+| Período | `close_date` no período ([1]) | `close_date` em `[@DataInicio, @DataFim)` |
+| Escopo | grupo atual = Decision, tipo I/R/P, status terminal ([3]) | igual, com tipo I/R (sem parâmetros de P na Virtual) |
+| Encerramento no fornecedor | nasceu e ficou no grupo, ou a última transferência de grupo foi entrada na Decision ([3.2]) | igual, com a Virtual |
+| Início | primeira entrada no grupo; se nasceu nele, `open_date` ([4], [3.3.1]) | igual |
+| Posse | linha do tempo de grupo, janelas em posse, soma de todas ([8.1]) | igual, em ordem de `system_time` e `act_log.id` |
+| Primeiro atendimento | primeiro `Em andamento` depois da entrada ([4]) | primeira mudança de status para fora da fila, dentro da posse (regra da Virtual) |
+| Suspensão | status suspensos e SOLN→SRVY_SENT descontados | não há; a Virtual não suspende |
+
+Efeito (fechamentos de 01/01/2025 a 02/10/2026):
+
+- saíram 21 chamados: 1644738 e 1651174 (encerraram no COI) e 19 sem
+  `close_date` (ainda em homologação, em andamento ou em
+  `Em homologação pelo fiscal`, como 1651461 e 1693493);
+- dos 273 que ficaram, 269 mudaram de tempo: deixa de contar o intervalo entre a
+  abertura e a primeira entrada (mediana de 7 min; máximo de 11,6 dias, em
+  1691112). Os 4 que não mudaram nasceram na Virtual;
+- índices alterados em 21 chamados. FAIA zerado em 6 (1655273, 1682297,
+  1685073, 1691112, 1691157, 1714513); FARC alterado em 16, zerado em 1691112.
+  O FAIA de 1714513 (3,226, cobrado na planilha de julho) cai a 0, porque
+  quase todo o tempo de resposta era do COI;
+- os valores novos foram conferidos com cálculo independente em Python (273/273).
+
+Schema: 36 colunas. Bloco A (identificação e datas, com `Data/Hora Fechamento`
+depois de `Data/Hora Resolução`), bloco B (as 15 colunas de apuração, na mesma
+ordem) e bloco C (colunas de contexto da Decision: `Status`, `Categoria`,
+`Responsável Abertura`, `Responsável Atendimento`, `Item de Configuração`,
+`Data Entrada Grupo Virtual`, `Meta Primeiro Atendimento`, `Indicador
+Reabertura`, `Acordo Prazo`, `Acordo Qualidade`, `Justificativa`,
+`Meta Atendimento`). Colunas da Decision com o mesmo conceito de uma coluna da
+Virtual não foram repetidas; `Tempo suspenso` não tem equivalente.
+
+As seções 6 e 7 descrevem a regra de período e o caso 1644738 de antes desta
+intervenção. Na regra vigente o período é o do fechamento e o 1644738 fica fora
+do escopo, por ter encerrado no COI.
+
+SHA256 do motor (bloco com fim de linha LF):
+`111ce0ac9c3a85fbb5077393885f7824cf4ba95f6417fd4083d87bd762b4fecd`.
+
+### 2026-10-02 — coluna `Tempo suspenso`
+
+- Mantido o mapeamento `Tempo Total Decision` → `Tsol (h)`, sem coluna
+  `Tempo Total Virtual`.
+- Incluída `Tempo suspenso` no bloco C, na posição 31 (depois de
+  `Data Entrada Grupo Virtual`, como na ordem relativa da Decision). Vale sempre
+  `0:00:00`, porque a regra da Virtual não suspende a contagem; não é descontada
+  de nenhum tempo, excesso ou índice.
+- Schema: 37 colunas na referência e 38 no Power BI (com `Planilha`).
+- Validação: mesmos 273 chamados (fechamentos de 01/01/2025 a 02/10/2026),
+  0 diferenças nas 36 colunas anteriores; Power BI x referência na janela de 12
+  meses: 273 = 273, 0 diferenças.
+- SHA256 do motor (bloco com fim de linha LF):
+  `18f5b90b90ea55b372dbc3fce6027468d4241ebfc37eab78a20dc0fd47d767c3`.

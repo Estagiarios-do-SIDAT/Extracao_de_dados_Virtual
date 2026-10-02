@@ -29,10 +29,10 @@ O bloco é **idêntico byte a byte** nos três arquivos. SHA256 do bloco, com fi
 linha LF:
 
 ```text
-8a6054a46d3059603bd538475893be49777fc44ae56a395be34993df8404dae9
+18f5b90b90ea55b372dbc3fce6027468d4241ebfc37eab78a20dc0fd47d767c3
 ```
 
-Ele recebe só `@DataInicio` e `@DataFim` e entrega a
+Ele recebe só `@DataInicio` e `@DataFim` (janela de fechamento) e entrega a
 tabela `#Virt_Saida`, com as duas planilhas e os dois regimes. Os arquivos
 diferem apenas em:
 
@@ -62,68 +62,89 @@ DECLARE @CoberturaMeses int = 12;
 ```
 
 A janela vai do **dia 1 do mês (corrente − `@CoberturaMeses`)** até o fim do dia
-de hoje, pela **data de abertura** do chamado. Com `12`, ela traz os doze meses
-fechados anteriores, inteiros, e o mês corrente até hoje. Assim o painel compara
-os meses entre si e sempre contém o último mês fechado. Para outra cobertura,
-troque só esse número (em *Etapas aplicadas → Fonte*). Nenhuma regra depende
-dele.
+de hoje, pela **data de fechamento** do chamado (`Data/Hora Fechamento`), como na
+consulta de referência. Com `12`, ela traz os doze meses anteriores, inteiros, e
+o mês corrente até hoje. Para outra cobertura, troque só esse número (em
+*Etapas aplicadas → Fonte*). Nenhuma regra depende dele.
 
-Exemplo: atualizado em 15/10/2026, com `12`, traz chamados abertos de
+Exemplo: atualizado em 15/10/2026, com `12`, traz chamados fechados de
 01/10/2025 até 15/10/2026.
 
-Volume e tempo de referência (janela 01/10/2025–01/10/2026): 287 chamados no
-total (275 em `Chamados_TCU`, 12 em `Chamados_24x7`), entre 16 e 36 por
-mês; 30 a 40 segundos por consulta.
-
-Como o mês é o da **abertura**, um chamado aberto no período e resolvido depois
-aparece no mês em que foi aberto, com a resolução real.
+Volume e tempo de referência (janela de 01/10/2025 a 02/10/2026): 273 chamados
+(261 em `Chamados_TCU`, 12 em `Chamados_24x7`), entre 15 e 35 por mês fechado;
+1 a 2 segundos por consulta.
 
 ## 5. Saída
 
-As 23 colunas das abas, na ordem da planilha, mais `Planilha` no final:
+As 37 colunas da referência, na mesma ordem, mais `Planilha` no final (38):
 
 | # | Coluna | Unidade |
 |---|---|---|
-| 1 | ID Chamado | — |
-| 2 | Descrição do Chamado | — |
-| 3 | Tipo (Incidente/Solicitação) | — |
+| 1 | ID Chamado | texto |
+| 2 | Descrição do Chamado | texto |
+| 3 | Tipo (Incidente/Solicitação) | texto |
 | 4 | Prioridade | 1 a 5 |
 | 5 | Regime | `TCU` / `24x7` |
 | 6 | Data/Hora Abertura | data e hora (Brasil) |
 | 7 | Data/Hora Início Atendimento | data e hora (Brasil) |
 | 8 | Data/Hora Resolução | data e hora (Brasil) |
-| 9 | Tini (h) | horas decimais |
-| 10 | Tsol (h) | horas decimais |
-| 11 | Horas Comerciais Resposta (h) | horas decimais |
-| 12 | Horas Não Comerciais Resposta (h) | horas decimais |
-| 13 | Horas Comerciais Resolução (h) | horas decimais |
-| 14 | Horas Não Comerciais Resolução (h) | horas decimais |
-| 15 | Meta Resposta (h) | horas decimais |
-| 16 | Meta Resolução (h) | horas decimais |
-| 17 | Excesso Resposta (h) | horas decimais |
-| 18 | Excesso Resolução (h) | horas decimais |
-| 19 | chave | `Tipo\|Prioridade\|Regime` |
-| 20 | Fator FARC | decimal |
-| 21 | Indice FARC | pontos percentuais |
-| 22 | Fator FAIA | decimal |
-| 23 | Indice FAIA | pontos percentuais |
-| 24 | Planilha | `DCIM` / `Manutenção` |
+| 9 | **Data/Hora Fechamento** | data e hora (Brasil) |
+| 10 | Tini (h) | texto `[h]:mm:ss` |
+| 11 | Tsol (h) | texto `[h]:mm:ss` |
+| 12 | Horas Comerciais Resposta (h) | texto `[h]:mm:ss` |
+| 13 | Horas Não Comerciais Resposta (h) | texto `[h]:mm:ss` |
+| 14 | Horas Comerciais Resolução (h) | texto `[h]:mm:ss` |
+| 15 | Horas Não Comerciais Resolução (h) | texto `[h]:mm:ss` |
+| 16 | Meta Resposta (h) | texto `[h]:mm:ss` |
+| 17 | Meta Resolução (h) | texto `[h]:mm:ss` |
+| 18 | Excesso Resposta (h) | texto `[h]:mm:ss` |
+| 19 | Excesso Resolução (h) | texto `[h]:mm:ss` |
+| 20 | chave | `Tipo\|Prioridade\|Regime` |
+| 21 | Fator FARC | decimal |
+| 22 | Indice FARC | pontos percentuais |
+| 23 | Fator FAIA | decimal |
+| 24 | Indice FAIA | pontos percentuais |
+| 25 | Status | texto |
+| 26 | Categoria | texto |
+| 27 | Responsável Abertura | texto |
+| 28 | Responsável Atendimento | texto |
+| 29 | Item de Configuração | texto |
+| 30 | Data Entrada Grupo Virtual | data e hora (Brasil) |
+| 31 | Tempo suspenso | texto `[h]:mm:ss` (sempre `0:00:00`) |
+| 32 | Meta Primeiro Atendimento | `Atende` / `Não Atende` / `N/A` |
+| 33 | Indicador Reabertura | `Sim` / `Não` |
+| 34 | Acordo Prazo | `-` |
+| 35 | Acordo Qualidade | `-` |
+| 36 | Justificativa | `-` |
+| 37 | Meta Atendimento | `Atende` / `Não Atende` / `N/A` |
+| 38 | Planilha | `DCIM` / `Manutenção` |
 
-Uma linha por chamado. Nas planilhas os tempos aparecem como `[h]:mm:ss`; aqui
-saem como número de horas (1,5 = 1h30).
+Uma linha por chamado. Os blocos e a origem de cada coluna estão em
+[virtual-calculation.md, seção 10](virtual-calculation.md#10-mapa-das-colunas).
+
+As durações (as 10 do bloco B e `Tempo suspenso`, que vale sempre `0:00:00`)
+saem como texto `[h]:mm:ss`, igual às planilhas: horas sem limite
+de 24 (`73:21:56`), zero como `0:00:00`. Como são texto, o Power BI não as soma;
+os totais de FAIA e FARC vêm das colunas `Indice FAIA` e `Indice FARC`, que são
+numéricas e calculadas em segundos dentro do motor, antes da formatação. Não há
+coluna numérica auxiliar de duração na saída.
+
+Os tempos contam só as janelas de posse da Virtual, a partir da primeira
+entrada no grupo (ver
+[virtual-calculation.md, seção 9.1](virtual-calculation.md#91-janelas-de-posse-da-virtual)).
 
 Para chegar aos totais da aba Cálculos de uma planilha em um mês, filtre
-`Planilha` e o mês de `Data/Hora Abertura` e some `Indice FAIA` e `Indice FARC`
-nas duas consultas. O Financeiro aplica `Total / 100` sobre o valor mensal da
-planilha: R$ 16.000,00 no DCIM e R$ 22.000,00 na Manutenção.
+`Planilha` e o mês de `Data/Hora Fechamento` e some `Indice FAIA` e
+`Indice FARC` nas duas consultas. O Financeiro aplica `Total / 100` sobre o
+valor mensal da planilha: R$ 16.000,00 no DCIM e R$ 22.000,00 na Manutenção.
 
 ## 6. Conferência
 
 Com o mesmo período, a soma das duas consultas do Power BI filtrada por
 `Planilha` tem as mesmas linhas e os mesmos valores dos dois resultados da
-referência rodada com `@Planilha` correspondente. Conferido em maio/2026 (01/05 a
-30/05, 23 chamados) e na janela de 12 meses de 01/10/2025 a 01/10/2026 (287
-chamados): nenhuma diferença nas 23 colunas.
+referência rodada com `@Planilha` correspondente. Conferido com fechamento em
+maio/2026 (19 chamados) e na janela de 01/10/2025 a 02/10/2026 (273 chamados):
+nenhuma diferença nas 37 colunas.
 
 Para conferir, troque no arquivo do Power BI as duas linhas que calculam
 `@DataInicio` e `@DataFim` por datas fixas iguais às da referência.
@@ -137,6 +158,5 @@ Para conferir, troque no arquivo do Power BI as duas linhas que calculam
   [virtual-calculation.md, seção 13](virtual-calculation.md#13-cuidados-e-limitações)).
   Com a janela de 12 meses, a partir de janeiro de 2027 parte da janela fica
   fora do calendário até essa atualização.
-- Chamados do mês corrente ainda sem início ou sem resolução saem com as
-  colunas correspondentes vazias. Os índices só ficam definitivos depois da
-  resolução.
+- Só entram chamados já fechados. Um chamado resolvido e ainda não fechado
+  aparece no mês em que for fechado.
