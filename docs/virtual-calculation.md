@@ -149,16 +149,26 @@ Todos em horário do Brasil (UTC−3), a partir dos campos em epoch do SDM.
 |---|---|
 | `Data/Hora Abertura` | `call_req.open_date` |
 | `Data Entrada Grupo Virtual` | primeira entrada na Virtual: a primeira transferência de grupo para `Fornecedores - Virtual`; se nasceu na Virtual, a abertura |
-| `Data/Hora Início Atendimento` | primeira **mudança de status** feita **enquanto o chamado está no grupo Virtual** para um status que **não seja de fila** (`Aberto, aguarda atendimento` / `Aguarda atendimento`) |
+| `Data/Hora Início Atendimento` | primeira passagem para **`Em andamento`** (evento `ST`/`RE`) feita **enquanto o chamado está no grupo Virtual**: a captura da Decision. Sem ela, a primeira atividade registrada na posse; sem atividade, a entrada na Virtual |
 | `Data/Hora Resolução` | `call_req.resolve_date`, gravado quando o chamado vai para `Em homologação` (evento `RE`) |
 | `Data/Hora Fechamento` | `call_req.close_date`, gravado no encerramento do chamado (evento `CL`, em geral pela automação, dias depois da resolução) |
 
 **Início do atendimento.** Ao transferir para a Virtual, o COI devolve o
-chamado para `Aguarda atendimento`. O início é o momento em que a fila da
-Virtual muda esse status, quase sempre para `Em andamento`, às vezes direto
-para `Agendado`. Uma mudança de status só conta se houver uma entrada na
-Virtual antes dela e nenhuma saída entre essa entrada e o evento, inclusive no
-mesmo segundo.
+chamado para `Aguarda atendimento`. O início é a primeira vez que a Virtual põe
+o chamado em `Em andamento`, como a captura da Decision. Passar antes para
+`Agendado` não é início: o chamado ainda não foi atendido. Um `Em andamento` só
+conta se houver uma entrada na Virtual antes dele e nenhuma saída entre essa
+entrada e o evento, inclusive no mesmo segundo; um `Em andamento` dado pelo COI
+fora da posse não conta.
+
+Sem `Em andamento` dentro da posse, vale o fallback da Decision:
+
+1. a **primeira atividade** registrada no `act_log` dentro da posse, de
+   qualquer tipo exceto transferência (`TR`), com o mesmo critério de posse;
+2. sem atividade, a **entrada na Virtual** (Tini = 0).
+
+A atividade no mesmo segundo da entrada não conta: é a mudança de status que o
+COI grava ao transferir o chamado.
 
 **Resolução.** Quando `resolve_date` está vazio porque o chamado seguiu para um
 status posterior sem marca de resolvido, vale o último evento `RE`, salvo se o
@@ -259,10 +269,60 @@ Exemplos:
   20/05 09:00:02 abertura (COI)
   20/05 09:09:17 entrada -> 09:15:51 saída      janela 1
   20/05 09:18:46 reentrada -> 21/05 10:10:04    janela 2 (até a Resolução)
-  Tini 0:24:20; Tsol 24:57:52
+  Tini 0:24:20 (6:34 da janela 1 + 17:46 da janela 2, até o Início)
+  Tsol 24:33:32 (só em Em andamento; os 24:20 em Aguarda atendimento são Tempo suspenso)
 ```
 
-### 7.2 Colunas
+### 7.2 Status ativos e Tempo suspenso
+
+Dentro da posse, o Tempo de Atendimento (`Tsol`) conta só os status
+**ativos**, os mesmos da Decision:
+
+| Status | Código | Tsol |
+|---|---|---|
+| `Em andamento` | `FIP` | conta |
+| `Aberto, aguarda atendimento` | `OP` | conta |
+| `Aguarda atendimento`, `Agendado`, `Aguarda fornecedor`, `Em homologação`, `Reaberto`, `Resolvido, concluído` e os demais | — | pausa; vai para `Tempo suspenso` |
+
+A linha do tempo de status vem de todo registro do `act_log` com o texto
+`Status alterado de 'X' para 'Y'.`, qualquer que seja o tipo: `ST` (mudança
+manual), `RE` (ida para `Em homologação`), `RO` (reabertura), `CL`
+(encerramento). Os eventos seguem a ordem de `system_time` e, no empate, de
+`act_log.id`. Na abertura vale a origem `X` do primeiro evento (sem evento,
+`Aberto, aguarda atendimento`); a partir de cada evento vale o destino `Y`, até o
+evento seguinte.
+
+Um `SOLN` (solução registrada) muda o status sem gravar a transição. Como na
+Decision, ele entra na linha do tempo como passagem para um status não ativo,
+que vale até o evento seguinte. Exemplo (SDM 1660920): solução em 01/12 18:03:15,
+reabertura (`RO`, `Resolvido, concluído` → `Reaberto`) em 02/12 19:17:32 e volta
+a `Em andamento` às 19:17:38. As 25:14:23 entre a solução e a volta ao
+atendimento são `Tempo suspenso`, e não `Tsol`.
+
+`Tsol` é a interseção, até a Resolução, das janelas de posse com os trechos
+ativos, somada em todas as janelas. `Tempo suspenso` é o restante da posse
+até a Resolução:
+
+```text
+Tsol + Tempo suspenso = tempo de posse até a Resolução
+```
+
+Exemplo (SDM 1698592, duas passagens):
+
+```text
+05/05 15:25:33 entrada na Virtual (Aguarda atendimento)   pausa       0:01:27
+05/05 15:27:00 Em andamento -> Início                     Tsol        0:05:10
+05/05 15:32:10 saída para o COI                           fora da posse
+06/05 16:09:58 reentrada (Aguarda atendimento)            pausa       0:01:42
+06/05 16:11:40 Em andamento                               Tsol        2:04:14
+06/05 18:15:54 Em homologação -> Resolução
+Tini 0:01:27   Tsol 2:09:24   Tempo suspenso 0:03:09
+```
+
+Um chamado em `Agendado` por meses dentro da posse (rotinas que a Virtual
+reagenda) acumula esse tempo em `Tempo suspenso`, e não em `Tsol`.
+
+### 7.3 Colunas
 
 As colunas de duração (as 10 do bloco B e `Tempo suspenso`) saem como **texto
 `[h]:mm:ss`**: horas sem limite de 24 (`73:21:56`, `360:00:00`), minutos e
@@ -273,32 +333,61 @@ a partir do texto.
 
 | Coluna | TCU | 24x7 |
 |---|---|---|
-| `Tini (h)` | tempo corrido nas janelas de posse até o Início | igual |
-| `Tsol (h)` | tempo corrido nas janelas de posse até a Resolução | igual |
+| `Tini (h)` | tempo corrido nas janelas de posse até o Início, em qualquer status | igual |
+| `Tsol (h)` | tempo corrido nas janelas de posse até a Resolução, só em status ativo (7.2) | igual |
 | `Horas Comerciais Resposta (h)` | parte de Tini dentro de 08:00–20:00, seg–sex, fora das datas `N` | 0 |
 | `Horas Não Comerciais Resposta (h)` | Tini − Comerciais Resposta | Tini |
-| `Horas Comerciais Resolução (h)` | parte de Tsol dentro da janela comercial | 0 |
+| `Horas Comerciais Resolução (h)` | parte de Tsol (trechos ativos) dentro da janela comercial | 0 |
 | `Horas Não Comerciais Resolução (h)` | Tsol − Comerciais Resolução | Tsol |
 | `Meta Resposta (h)` / `Meta Resolução (h)` | parâmetro | parâmetro |
 | `Excesso Resposta (h)` | máx(0, Comerciais Resposta − Meta Resposta) | máx(0, Tini − Meta Resposta) |
 | `Excesso Resolução (h)` | máx(0, Comerciais Resolução − Meta Resolução) | máx(0, Tsol − Meta Resolução) |
 | `Indice FAIA` | Excesso Resposta × Fator FAIA | igual |
 | `Indice FARC` | Excesso Resolução × Fator FARC | igual |
-| `Tempo suspenso` | sempre `0:00:00` | igual |
+| `Tempo suspenso` | posse até a Resolução − Tsol, corrido | igual |
 | `Meta Primeiro Atendimento` | `Não Atende` se Excesso Resposta > 0; `Atende` se 0; `N/A` sem valor | igual |
 | `Meta Atendimento` | o mesmo, sobre Excesso Resolução | igual |
 
 - A janela comercial é calculada dia a dia. Em cada dia útil conta a
   sobreposição do trecho com 08:00–20:00. Sábado e domingo não contam,
   independentemente de `SET DATEFIRST`.
-- Dentro da posse, nenhum status suspende a contagem: `Agendado` e outros
-  status de espera não são descontados. Por isso `Tempo suspenso` é sempre
-  `0:00:00`; a coluna existe para manter o schema alinhado à Decision e não é
-  descontada de nenhum tempo, excesso ou índice.
+- As horas comerciais e não comerciais são medidas sobre os mesmos trechos do
+  tempo de que fazem parte. Valem sempre: Tini = Comerciais Resposta + Não
+  Comerciais Resposta; Tsol = Comerciais Resolução + Não Comerciais Resolução.
+- `Tempo suspenso` é informativo: já está fora de `Tsol` e não é descontado de
+  novo de nenhum excesso ou índice.
 - **Índice** é expresso em **pontos percentuais**: horas de excesso × fator,
   com o excesso em segundos convertido para horas (6 casas). Exemplo: 8,065 h
   de excesso × 0,4 = 3,226.
 - Sem Início, as colunas de resposta ficam vazias.
+
+Correspondência com as colunas da Decision:
+
+| Virtual | Decision |
+|---|---|
+| `Tini (h)` | Tempo Primeiro Atendimento |
+| `Tsol (h)` | Tempo de Atendimento |
+| `Excesso Resposta (h)` | Primeiro Atendimento Excedido |
+| `Excesso Resolução (h)` | Tempo Atendimento Excedido |
+
+A arquitetura é a da Decision; a Virtual mantém o próprio regime, calendário,
+horário 08–20, metas e fatores. A Decision tem dois motores com listas de
+status ativos diferentes: o do `Tempo Total Decision` e do `Tempo suspenso`
+(ativos: `Aberto, aguarda atendimento`, `Aguarda atendimento`, `Em andamento`,
+`Reaberto`) e o do `Tempo de Atendimento`, que gera o FARC (ativos: só
+`Em andamento` e `Aberto, aguarda atendimento`). O `Tsol` segue o segundo,
+porque é ele que define o excesso e o índice.
+
+Diferenças em relação à Decision:
+
+| Regra | Decision | Virtual | Motivo |
+|---|---|---|---|
+| Captura | 1º `Em andamento` após a entrada, em qualquer grupo | 1º `Em andamento` dentro da posse | o `Em andamento` dado pelo COI depois de o chamado sair da Virtual não é atendimento da Virtual |
+| Tempo Primeiro Atendimento | intervalo contínuo da entrada à captura | só o tempo de posse até a captura | tempo em outro grupo não é responsabilidade da Virtual |
+| Passagens no Tempo de Atendimento | a partir da última entrada | todas as janelas de posse | a Virtual atende em mais de uma passagem; as janelas são as do motor de posse da Decision |
+| Fim do Tempo de Atendimento | 1º `SOLN`, senão `resolve_date` | Resolução (`resolve_date`), com o `SOLN` como pausa | na Virtual a entrega é a ida para `Em homologação` (`resolve_date`); o `SOLN` é raro e pode ser seguido de reabertura |
+| Estado no início | heurística pela origem do 1º `ST` | origem do 1º evento e, depois, o destino de cada evento | regra do motor de posse da Decision; a heurística trata `Aguarda fornecedor` como ativo |
+| `Tempo suspenso` | status fora dos 4 ativos do `Tempo Total Decision`, mais `SOLN` → pesquisa | posse até a Resolução − `Tsol` | a Virtual não tem `Tempo Total Decision`; o tempo pausado do `Tsol` aparece inteiro em `Tempo suspenso` |
 
 ## 8. Mapa das colunas
 
@@ -310,11 +399,11 @@ a partir do texto.
 | 4 | Prioridade | `call_req.priority` | 1 a 5 |
 | 5 | Regime | parâmetros | por Tipo + Prioridade; define o resultado |
 | 6 | Data/Hora Abertura | `open_date` | seção 4 |
-| 7 | Data/Hora Início Atendimento | `act_log` ST/RE dentro da posse | seção 4 |
+| 7 | Data/Hora Início Atendimento | `act_log`: 1º `Em andamento` dentro da posse; senão 1ª atividade na posse; senão a entrada | seção 4 |
 | 8 | Data/Hora Resolução | `resolve_date` / último RE | seção 4; define o período com `RESOLUCAO` |
 | 9 | Data/Hora Fechamento | `close_date` | seção 4; define o período com `FECHAMENTO` |
-| 10 | Tini (h) | janelas de posse até 7 | corrido, `[h]:mm:ss` |
-| 11 | Tsol (h) | janelas de posse até 8 | corrido, `[h]:mm:ss` |
+| 10 | Tini (h) | janelas de posse até 7 | corrido, `[h]:mm:ss`; Tempo Primeiro Atendimento |
+| 11 | Tsol (h) | janelas de posse até 8, só status ativo | corrido, `[h]:mm:ss`; Tempo de Atendimento |
 | 12 | Horas Comerciais Resposta (h) | parte comercial de 10 | calendário; 24x7 = 0 |
 | 13 | Horas Não Comerciais Resposta (h) | 10 − 12 | 24x7 = Tini |
 | 14 | Horas Comerciais Resolução (h) | parte comercial de 11 | calendário; 24x7 = 0 |
@@ -334,7 +423,7 @@ a partir do texto.
 | 28 | Responsável Atendimento | `call_req.assignee` → `ca_contact` | idem |
 | 29 | Item de Configuração | `call_req.affected_rc` → `ca_owned_resource` | vazio sem IC |
 | 30 | Data Entrada Grupo Virtual | primeira entrada na Virtual | seção 4 |
-| 31 | Tempo suspenso | — | sempre `0:00:00`: a Virtual não tem status que suspendam a contagem |
+| 31 | Tempo suspenso | janelas de posse até 8 − 11 | corrido, `[h]:mm:ss`; posse em status que pausam (seção 7.2) |
 | 32 | Meta Primeiro Atendimento | 18 | `Atende` / `Não Atende` / `N/A` |
 | 33 | Indicador Reabertura | `act_log`: tipo com `reab` ou texto com `reabert` | `Sim` / `Não` |
 | 34 | Acordo Prazo | — | `-` (campo reservado, como na Decision) |

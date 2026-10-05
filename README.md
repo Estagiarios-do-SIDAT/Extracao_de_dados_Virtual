@@ -72,14 +72,23 @@ Em resumo:
 - **Posse:** o relógio começa na primeira entrada na Virtual (na abertura, se
   o chamado nasceu nela), para nas saídas e volta nas reentradas; todas as
   janelas de posse são somadas.
+- **Tempos (modelo da Decision):** `Tini (h)` é o Tempo Primeiro Atendimento:
+  tempo de posse até o primeiro `Em andamento` dentro da posse (sem ele, a
+  primeira atividade registrada na posse; sem atividade, a entrada). `Tsol (h)`
+  é o Tempo de Atendimento: tempo de posse até a resolução, contando só os
+  status ativos `Em andamento` e `Aberto, aguarda atendimento`, como no Tempo de
+  Atendimento da Decision; os demais (`Aguarda atendimento`, `Agendado`,
+  `Reaberto`, solução registrada...) pausam e vão para `Tempo suspenso`.
+  `Excesso Resposta (h)` e `Excesso Resolução (h)` correspondem ao Primeiro
+  Atendimento Excedido e ao Tempo Atendimento Excedido da Decision.
 - **Colunas:** identificação e datas (com `Data/Hora Fechamento`), as 15
   colunas de apuração da Virtual e colunas de contexto no padrão da Decision,
   entre elas `Item de Configuração` e `Categoria`, que identificam o serviço ou
   o objeto atendido. A última coluna, `Grupo`, é o grupo atual do chamado no
   SDM (`call_req.group_id`); é informativa e não é a posse histórica da Virtual.
-  `Tempo suspenso` vale `0:00:00`, porque a regra da Virtual não tem status
-  que suspendam a contagem. As durações saem como `[h]:mm:ss`; fatores e
-  índices são numéricos e calculados em segundos.
+  `Tempo suspenso` é o tempo de posse até a resolução em status que pausam;
+  `Tsol` + `Tempo suspenso` = posse total até a resolução. As durações saem como
+  `[h]:mm:ss`; fatores e índices são numéricos e calculados em segundos.
 - **Horário comercial (TCU):** 08:00–20:00, segunda a sexta, fora do
   calendário TCU.
 

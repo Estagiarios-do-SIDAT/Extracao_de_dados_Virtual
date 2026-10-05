@@ -32,9 +32,14 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 --               tempo de transferencias de grupo. O relogio comeca na primeira
 --               entrada (ou na abertura, se nasceu na Virtual), para nas saidas,
 --               volta nas reentradas; todas as janelas sao somadas.
---   Inicio      primeira mudanca de status, feita enquanto o chamado esta no
---               grupo Virtual, para um status que nao seja de fila
---               ('Aberto, aguarda atendimento' / 'Aguarda atendimento').
+--   Inicio      primeira passagem para 'Em andamento' feita enquanto o chamado
+--               esta no grupo Virtual (a captura da Decision). Sem ela, a
+--               primeira atividade registrada na posse (act_log, exceto
+--               transferencias); sem atividade, a entrada na Virtual.
+--   Tini        Tempo Primeiro Atendimento: tempo de posse ate o Inicio.
+--   Tsol        Tempo de Atendimento: tempo de posse ate a Resolucao em status
+--               ativo ('Em andamento' ou 'Aberto, aguarda atendimento'), como
+--               na Decision. Os demais status pausam e vao para Tempo suspenso.
 --   Resolucao   call_req.resolve_date; se vazio, o ultimo evento RE (passagem
 --               para 'Em homologacao'), desde que o chamado nao esteja em
 --               status de atendimento aberto.
@@ -242,7 +247,9 @@ CREATE UNIQUE INDEX IX_Virt_Periodo_persid ON #Virt_Periodo (persid);
 --     marcos, nunca na data atual), com os nomes extraidos do texto padrao do
 --     act_log:
 --       TR: "Transferir Grupo de 'X' para 'Y'"
---       ST/RE: "Status alterado de 'X' para 'Y'."
+--       status: "Status alterado de 'X' para 'Y'.", em qualquer tipo de
+--       registro (ST, RE = ida para homologacao, RO = reabertura, CL...)
+--       SOLN: solucao registrada, que muda o status sem gravar a transicao
 --     Transferencia so de responsavel nao tem grupo_de/grupo_para e nao muda a
 --     posse.
 --------------------------------------------------------------------------------
@@ -254,6 +261,7 @@ SELECT
     al.[type],
     g.grupo_de,
     g.grupo_para,
+    st.status_de,
     st.status_para
 INTO #Virt_Log
 FROM #Virt_Periodo AS p
@@ -279,17 +287,20 @@ CROSS APPLY (
                           THEN LEFT(g0.para, CHARINDEX(N'''', g0.para) - 1) END
 ) AS g
 CROSS APPLY (
-    SELECT ps = CASE WHEN al.[type] IN ('ST', 'RE') AND t.txt LIKE N'Status alterado de %'
+    SELECT ps = CASE WHEN t.txt LIKE N'Status alterado de %'
                      THEN CHARINDEX(N''' para ''', t.txt) ELSE 0 END
 ) AS ps
 CROSS APPLY (
     SELECT status_resto = CASE WHEN ps.ps > 0 THEN SUBSTRING(t.txt, ps.ps + 8, 4000) END
 ) AS sr
 CROSS APPLY (
-    SELECT status_para = CASE WHEN CHARINDEX(N'''', sr.status_resto) > 0
-                              THEN LEFT(sr.status_resto, CHARINDEX(N'''', sr.status_resto) - 1) END
+    SELECT
+        -- "Status alterado de '" tem 20 caracteres: a origem comeca no 21o.
+        status_de   = CASE WHEN ps.ps > 21 THEN SUBSTRING(t.txt, 21, ps.ps - 21) END,
+        status_para = CASE WHEN CHARINDEX(N'''', sr.status_resto) > 0
+                           THEN LEFT(sr.status_resto, CHARINDEX(N'''', sr.status_resto) - 1) END
 ) AS st
-WHERE al.[type] IN ('TR', 'ST', 'RE')
+WHERE (al.[type] IN ('TR', 'SOLN') OR t.txt LIKE N'Status alterado de %')
   AND al.system_time >= p.open_date
   AND (p.close_date IS NULL OR al.system_time <= p.close_date);
 CREATE CLUSTERED INDEX IX_Virt_Log ON #Virt_Log (id, system_time, log_id);
@@ -371,7 +382,7 @@ SELECT
     p.priority AS prioridade,
     p.open_date AS abertura_epoch,
     ent.entrada_epoch,
-    ini.inicio_epoch,
+    COALESCE(ini.inicio_epoch, atv.atividade_epoch, ent.entrada_epoch) AS inicio_epoch,
     COALESCE(
         p.resolve_date,
         CASE WHEN NOT (sa.resolved = 0 AND sa.hold = 0) THEN re.ultimo_re END
@@ -397,9 +408,9 @@ OUTER APPLY (
     WHERE m.id = p.id
       AND m.movimento = 'E'
 ) AS ent
--- Inicio: primeira mudanca de status para um status fora da fila, com o
--- chamado dentro de uma passagem pelo grupo Virtual (entrada antes do evento e
--- nenhuma saida entre a entrada e o evento, inclusive no mesmo segundo).
+-- Inicio (captura): primeira passagem para 'Em andamento', com o chamado dentro
+-- de uma passagem pelo grupo Virtual (entrada antes do evento e nenhuma saida
+-- entre a entrada e o evento, inclusive no mesmo segundo).
 OUTER APPLY (
     SELECT MIN(l.system_time) AS inicio_epoch
     FROM #Virt_Log AS l
@@ -407,7 +418,7 @@ OUTER APPLY (
         ON sd.sym = l.status_para COLLATE DATABASE_DEFAULT
     WHERE l.id = p.id
       AND l.[type] IN ('ST', 'RE')
-      AND sd.code NOT IN ('OP', 'REOP') -- Aberto, aguarda atendimento / Aguarda atendimento
+      AND sd.code = 'FIP' -- Em andamento
       AND EXISTS (
             SELECT 1
             FROM #Virt_Movimento AS e
@@ -424,6 +435,33 @@ OUTER APPLY (
               )
       )
 ) AS ini
+-- Fallback da captura, como na Decision: sem 'Em andamento' na posse, a primeira
+-- atividade registrada na posse (qualquer act_log, exceto transferencias), com
+-- o mesmo criterio de posse do Inicio. Sem atividade, vale a entrada (Tini 0).
+OUTER APPLY (
+    SELECT MIN(al.system_time) AS atividade_epoch
+    FROM dbo.act_log AS al
+    WHERE ini.inicio_epoch IS NULL
+      AND al.call_req_id = p.persid
+      AND ISNULL(al.[type], '') <> 'TR'
+      AND al.system_time >= p.open_date
+      AND (p.close_date IS NULL OR al.system_time <= p.close_date)
+      AND EXISTS (
+            SELECT 1
+            FROM #Virt_Movimento AS e
+            WHERE e.id = p.id
+              AND e.movimento = 'E'
+              AND e.momento < al.system_time
+              AND NOT EXISTS (
+                    SELECT 1
+                    FROM #Virt_Movimento AS s
+                    WHERE s.id = p.id
+                      AND s.movimento = 'S'
+                      AND s.momento >= e.momento
+                      AND s.momento <= al.system_time
+              )
+      )
+) AS atv
 OUTER APPLY (
     SELECT MAX(l.system_time) AS ultimo_re
     FROM #Virt_Log AS l
@@ -572,10 +610,66 @@ WHERE DATEDIFF(DAY, '19000101', d.Dia) % 7 < 5
   );
 
 --------------------------------------------------------------------------------
--- [9] Trechos de posse ate os marcos (janelas montadas em [6.1]).
+-- [9] Status ativos e trechos ate os marcos.
+--     Linha do tempo de status do chamado: na abertura vale a origem do
+--     primeiro evento de status (sem evento, 'Aberto, aguarda atendimento'); cada
+--     evento de status (ST, RE, RO, CL...) passa a valer o status de destino ate
+--     o proximo, em ordem de system_time e act_log.id. Um SOLN e uma entrada
+--     implicita em status nao ativo, como na Decision. Ativos, como no Tempo de
+--     Atendimento da Decision: 'Em andamento' (FIP) e 'Aberto, aguarda
+--     atendimento' (OP). Os demais (Aguarda atendimento, Agendado, Em
+--     homologacao, Reaberto...) pausam o Tempo de Atendimento.
 --------------------------------------------------------------------------------
--- Trechos de cada janela ate o marco: R = ate o Inicio (resposta),
--- S = ate a Resolucao (resolucao).
+IF OBJECT_ID('tempdb..#Virt_StatusLinha') IS NOT NULL DROP TABLE #Virt_StatusLinha;
+SELECT
+    c.id,
+    c.abertura_epoch AS momento,
+    0 AS ordem,
+    CASE WHEN pe.code_de IS NULL OR pe.code_de IN ('FIP', 'OP') THEN 1 ELSE 0 END AS ativo
+INTO #Virt_StatusLinha
+FROM #Virt_Chamado AS c
+OUTER APPLY (
+    SELECT TOP (1) sdd.code AS code_de
+    FROM #Virt_Log AS l
+    LEFT JOIN dbo.cr_stat AS sdd
+        ON sdd.sym = l.status_de COLLATE DATABASE_DEFAULT
+    WHERE l.id = c.id
+      AND l.status_para IS NOT NULL
+    ORDER BY l.system_time, l.log_id
+) AS pe
+UNION ALL
+SELECT
+    l.id,
+    l.system_time,
+    l.log_id,
+    CASE WHEN sd.code IN ('FIP', 'OP') THEN 1 ELSE 0 END
+FROM #Virt_Log AS l
+JOIN #Virt_Chamado AS c
+    ON c.id = l.id
+LEFT JOIN dbo.cr_stat AS sd
+    ON sd.sym = l.status_para COLLATE DATABASE_DEFAULT
+WHERE l.status_para IS NOT NULL
+   OR l.[type] = 'SOLN'; -- SOLN: sem destino gravado, fica nao ativo
+
+IF OBJECT_ID('tempdb..#Virt_StatusAtivo') IS NOT NULL DROP TABLE #Virt_StatusAtivo;
+SELECT
+    x.id,
+    DATEADD(HOUR, -@HorasBrasilParaUTC, DATEADD(SECOND, x.momento, @Epoch)) AS ini,
+    DATEADD(HOUR, -@HorasBrasilParaUTC, DATEADD(SECOND, x.proximo, @Epoch)) AS fim -- NULL = ainda ativo
+INTO #Virt_StatusAtivo
+FROM (
+    SELECT
+        s.id, s.momento, s.ordem, s.ativo,
+        LEAD(s.momento) OVER (PARTITION BY s.id ORDER BY s.momento, s.ordem) AS proximo
+    FROM #Virt_StatusLinha AS s
+) AS x
+WHERE x.ativo = 1
+  AND (x.proximo IS NULL OR x.proximo > x.momento);
+CREATE CLUSTERED INDEX IX_Virt_StatusAtivo ON #Virt_StatusAtivo (id, ini);
+
+-- Trechos de posse ate o marco: R = ate o Inicio (resposta); T = ate a
+-- Resolucao (posse total, base do Tempo suspenso); S = ate a Resolucao e so em
+-- status ativo (Tempo de Atendimento).
 IF OBJECT_ID('tempdb..#Virt_Trecho') IS NOT NULL DROP TABLE #Virt_Trecho;
 SELECT
     j.id,
@@ -586,22 +680,43 @@ INTO #Virt_Trecho
 FROM #Virt_Janela AS j
 JOIN #Virt_Marco AS m
     ON m.id = j.id
-CROSS APPLY (VALUES ('R', m.inicio), ('S', m.resolucao)) AS k (medida, marco)
+CROSS APPLY (VALUES ('R', m.inicio), ('T', m.resolucao)) AS k (medida, marco)
 WHERE k.marco IS NOT NULL
   AND j.ini < k.marco;
+
+INSERT INTO #Virt_Trecho (id, medida, a, b)
+SELECT
+    j.id,
+    'S',
+    lim.a,
+    lim.b
+FROM #Virt_Janela AS j
+JOIN #Virt_Marco AS m
+    ON m.id = j.id
+JOIN #Virt_StatusAtivo AS sa
+    ON sa.id = j.id
+CROSS APPLY (
+    SELECT
+        a = (SELECT MAX(v) FROM (VALUES (j.ini), (sa.ini)) AS x (v)),
+        b = (SELECT MIN(v) FROM (VALUES (j.fim), (sa.fim), (m.resolucao)) AS x (v))
+) AS lim
+WHERE m.resolucao IS NOT NULL
+  AND lim.a < lim.b;
 CREATE CLUSTERED INDEX IX_Virt_Trecho ON #Virt_Trecho (id, medida);
 
 --------------------------------------------------------------------------------
--- [10] Tempos em segundos, somados sobre os trechos. Tini/Tsol sao tempo
---      corrido de posse; as horas comerciais so existem no regime TCU. No
---      24x7 todo o tempo fica no bloco nao comercial e o excesso e medido
---      sobre o corrido.
+-- [10] Tempos em segundos, somados sobre os trechos. Tini = posse ate o
+--      Inicio; Tsol = posse em status ativo ate a Resolucao; posse total ate a
+--      Resolucao para o Tempo suspenso. As horas comerciais so existem no
+--      regime TCU. No 24x7 todo o tempo fica no bloco nao comercial e o excesso
+--      e medido sobre o corrido.
 --------------------------------------------------------------------------------
 IF OBJECT_ID('tempdb..#Virt_Tempo') IS NOT NULL DROP TABLE #Virt_Tempo;
 SELECT
     m.id,
     CASE WHEN m.inicio IS NULL THEN NULL ELSE ISNULL(cor.resp, 0) END AS tini_s,
     CASE WHEN m.resolucao IS NULL THEN NULL ELSE ISNULL(cor.sol, 0) END AS tsol_s,
+    CASE WHEN m.resolucao IS NULL THEN NULL ELSE ISNULL(cor.posse, 0) END AS posse_sol_s,
     CASE WHEN m.inicio IS NULL THEN NULL
          WHEN m.regime = N'24x7' THEN 0
          ELSE ISNULL(com.resp, 0) END AS com_resp_s,
@@ -613,7 +728,8 @@ FROM #Virt_Marco AS m
 OUTER APPLY (
     SELECT
         SUM(CASE WHEN t.medida = 'R' THEN DATEDIFF_BIG(SECOND, t.a, t.b) END) AS resp,
-        SUM(CASE WHEN t.medida = 'S' THEN DATEDIFF_BIG(SECOND, t.a, t.b) END) AS sol
+        SUM(CASE WHEN t.medida = 'S' THEN DATEDIFF_BIG(SECOND, t.a, t.b) END) AS sol,
+        SUM(CASE WHEN t.medida = 'T' THEN DATEDIFF_BIG(SECOND, t.a, t.b) END) AS posse
     FROM #Virt_Trecho AS t
     WHERE t.id = m.id
 ) AS cor
@@ -655,10 +771,9 @@ SELECT
     mt.meta_sol_s,
     x.exc_resp_s,
     x.exc_sol_s,
-    -- Tempo suspenso: a Virtual nao tem status que suspendam a contagem. A
-    -- coluna existe para alinhar o schema a Decision e vale zero; nao e
-    -- descontada de nenhum tempo, excesso ou indice.
-    CONVERT(bigint, 0) AS suspenso_s,
+    -- Tempo suspenso: tempo de posse ate a Resolucao em status nao ativo
+    -- (corrido). Tsol + Tempo suspenso = posse total ate a Resolucao.
+    t.posse_sol_s - t.tsol_s AS suspenso_s,
     CONVERT(decimal(18,6), CONVERT(decimal(18,6), x.exc_sol_s  / 3600.0000000000) * m.FatorFARC) AS indice_farc,
     CONVERT(decimal(18,6), CONVERT(decimal(18,6), x.exc_resp_s / 3600.0000000000) * m.FatorFAIA) AS indice_faia
 INTO #Virt_Calculo

@@ -29,7 +29,7 @@ O bloco é **idêntico byte a byte** nos três arquivos. SHA256 do bloco, com fi
 linha LF:
 
 ```text
-4b51f86c3d6c9f95be1f131c27fbaa5b767404d6e18b10a8cdc411a6cc4e5dda
+265dcbd07712839dff5b426f2a6e05bc3c8acfef55e91ac936cc8625b5c09519
 ```
 
 Ele recebe só `@DataInicio`, `@DataFim` e `@DataReferencia` e entrega a
@@ -127,7 +127,7 @@ As mesmas 38 colunas da referência, na mesma ordem:
 | 28 | Responsável Atendimento | texto |
 | 29 | Item de Configuração | texto |
 | 30 | Data Entrada Grupo Virtual | data e hora (Brasil) |
-| 31 | Tempo suspenso | texto `[h]:mm:ss` (sempre `0:00:00`) |
+| 31 | Tempo suspenso | texto `[h]:mm:ss` (posse em status que pausam) |
 | 32 | Meta Primeiro Atendimento | `Atende` / `Não Atende` / `N/A` |
 | 33 | Indicador Reabertura | `Sim` / `Não` |
 | 34 | Acordo Prazo | `-` |
@@ -139,8 +139,8 @@ As mesmas 38 colunas da referência, na mesma ordem:
 Uma linha por chamado. Os blocos e a origem de cada coluna estão em
 [virtual-calculation.md, seção 8](virtual-calculation.md#8-mapa-das-colunas).
 
-As durações (as 10 do bloco B e `Tempo suspenso`, que vale sempre `0:00:00`)
-saem como texto `[h]:mm:ss`: horas sem limite
+As durações (as 10 do bloco B e `Tempo suspenso`) saem como texto
+`[h]:mm:ss`: horas sem limite
 de 24 (`73:21:56`), zero como `0:00:00`. Como são texto, o Power BI não as soma;
 os totais de FAIA e FARC vêm das colunas `Indice FAIA` e `Indice FARC`, que são
 numéricas e calculadas em segundos dentro do motor, antes da formatação. Não há
@@ -149,6 +149,9 @@ coluna numérica auxiliar de duração na saída.
 Os tempos contam só as janelas de posse da Virtual, a partir da primeira
 entrada no grupo (ver
 [virtual-calculation.md, seção 7.1](virtual-calculation.md#71-janelas-de-posse-da-virtual)).
+`Tsol (h)` conta só os status ativos; o tempo de posse em `Aguarda atendimento`,
+`Agendado`, `Reaberto`, depois de uma solução registrada e nos demais status de
+espera sai em `Tempo suspenso` (seção 7.2).
 
 `Grupo` é o grupo atual do chamado no SDM (`call_req.group_id`), só para
 análise: não é a posse histórica da Virtual. No modo `RESOLUCAO` pode trazer

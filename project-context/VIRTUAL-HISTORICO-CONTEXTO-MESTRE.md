@@ -56,12 +56,12 @@ O nome do arquivo não marca o fim real do período: a planilha
 | DCIM (removida da arquitetura em 2026-10-02) | `log_agent` = automação (`Usuário de Serviço - ServiceDesk`) **e** IC `dcim` | 60/60; coincide com `%AFFECTED_RC=dcim` da mensagem de criação em toda a população de 2025–2026 (267 chamados) |
 | Regime | Parâmetros por Tipo + Prioridade (P1/P2 = 24x7) | nenhum campo do SDM traz o regime |
 | Abertura | `open_date` | exato nas linhas não digitadas à mão |
-| Início | 1ª mudança de status (ST/RE), dentro de uma passagem pela Virtual, para status fora da fila (`OP`, `REOP`) | exato em todas as linhas não digitadas; 1647942 vai direto para *Agendado* |
+| Início | 1º `Em andamento` (ST/RE para `FIP`) dentro de uma passagem pela Virtual: a captura da Decision; sem ele, 1ª atividade do `act_log` (exceto `TR`) na posse; sem atividade, a entrada | decisão de 2026-10-05 (fallback: Decision [4]/[7.1]); até então, 1ª mudança para fora da fila (`OP`, `REOP`), que em 1647942 pegava o *Agendado* |
 | Resolução | `resolve_date`; se vazio, último RE, salvo chamado em atendimento aberto | 1651461 (`Em homologação pelo fiscal` limpa `resolve_date`) |
 | Horário comercial | 08–20h, seg–sex, fora das datas com `Conta_SLA = 'N'`, calculado dia a dia | reproduz todas as células K/M com fórmula íntegra |
 | 24x7 | comerciais = 0; excesso sobre tempo corrido | planilhas de 2026; FARC real em 1719182 (28,218) |
 | Índice FAIA | horas × fator (com ×24) | 1ª linha de todas as abas, FARC inteiro, FAIA real de 1714513 (3,226) |
-| Status de espera | não suspendem a contagem | as fórmulas só usam as três datas |
+| Status de espera | pausam o Tsol: só `Em andamento` e `Aberto, aguarda atendimento` contam; o resto da posse até a Resolução vai para `Tempo suspenso`. Linha de status: toda transição textual do `act_log` (ST, RE, RO, CL) e o `SOLN` como pausa | status ativos do Tempo de Atendimento da Decision ([9.2]); SOLN implícito da Decision ([8.2]); decisão de 2026-10-05 (até então não suspendiam, como nas fórmulas das planilhas) |
 | Posse | relógio começa na 1ª entrada na Virtual (abertura, se nasceu nela); saídas pausam, reentradas reativam, janelas somadas | janelas de posse da Decision ([8.1]); decisão de 2026-10-02 |
 | Fechamento | `Data/Hora Fechamento` = `close_date` (= evento CL, ±1 s) | 265 chamados do escopo com CL: 258 no mesmo segundo, 7 com 1 s de diferença de gravação |
 | Formato | 10 durações em texto `[h]:mm:ss`; cálculo em segundos; fatores e índices numéricos | igual às planilhas |
@@ -431,3 +431,147 @@ SHA256 do motor (bloco com fim de linha LF):
 - É evidência e apoio de validação humana. Não é dependência do motor SQL e não
   altera a fonte de verdade (SDM/MDB); `queries/` e `powerbi/` não leem nada de
   `analysis/`.
+
+### 2026-10-05 — Tini/Tsol no modelo temporal da Decision
+
+Objetivo: usar a Decision como referência funcional dos tempos, com
+`Tini (h)` = Tempo Primeiro Atendimento, `Tsol (h)` = Tempo de Atendimento,
+`Excesso Resposta (h)` = Primeiro Atendimento Excedido e
+`Excesso Resolução (h)` = Tempo Atendimento Excedido. Regime, calendário,
+horário 08–20, metas e fatores continuam os da Virtual.
+
+Regra lida no SQL da Decision (`queries/consulta_faia_farc.sql`, sem alteração):
+
+| Tema | Decision | Virtual antes | Virtual agora |
+|---|---|---|---|
+| Captura | 1º ST para `Em andamento` depois da entrada ([4]) | 1ª mudança para fora da fila, na posse | 1º `Em andamento` dentro da posse |
+| Tempo Primeiro Atendimento | intervalo contínuo da entrada à captura, sem recorte de posse ([8.10]) | posse até o Início | posse até o Início |
+| Tempo de Atendimento | da **última** entrada ao terminal (SOLN, senão resolução), só status ativos ([5], [7], [9.2]) | posse até a Resolução, todos os status | posse até a Resolução, só status ativos, todas as janelas |
+| Status ativos | `Em andamento`, `Aberto, aguarda atendimento` ([9.2]) | — | iguais |
+| Tempo suspenso | tempo fora dos ativos + SOLN→pesquisa ([9.2.1]) | `0:00:00` | posse até a Resolução − Tsol |
+
+Decisões do usuário nesta rodada: pausar os status não ativos e mostrar o tempo
+em `Tempo suspenso`; somar todas as janelas de posse (não só a última entrada);
+Início = 1º `Em andamento` dentro da posse, com Tini só em tempo de posse.
+Tini no modo literal da Decision mudaria 8 chamados, contando tempo com o COI
+(ex.: 1731379, de 3:48:10 para 97:09:43); com a regra escolhida muda só 1647942.
+Last entry (Decision) x todas as janelas: 17 chamados com Tsol diferente.
+SOLN aparece em só 9 dos 293 chamados de 12 meses; o terminal continua sendo a
+Resolução (`resolve_date`).
+
+Particularidade da Decision, não reproduzida: o primeiro trecho da linha de
+status é tratado como inativo só se a origem do primeiro evento for `Agendado`,
+`Aguarda atendimento`, `Em homologação` ou `Em teste na TI`; uma origem
+`Aguarda fornecedor` conta como ativa. A Virtual usa a regra coerente (na
+abertura vale a origem do primeiro evento; depois, o destino de cada evento).
+Com a heurística da Decision, 3 chamados teriam outro Tsol (1695931, 1731379,
+1732031).
+
+Efeito em 12 meses (293 chamados, `RESOLUCAO` ∪ `FECHAMENTO`, contra `52b9b93`):
+
+- população idêntica em maio, 30/09–06/10 e 12 meses, nos dois modos;
+- Tsol mudou em 293 e `Tempo suspenso` em 293; Horas Comerciais Resolução em
+  246 e Não Comerciais em 74; Excesso Resolução e Indice FARC em 24;
+  `Meta Atendimento` passou de `Não Atende` para `Atende` em 6 (1650826,
+  1651064, 1651174, 1681392, 1683696, 1683711);
+- Início, Tini, horas de resposta, Excesso Resposta e Indice FAIA mudaram só em
+  1647942: Início de 07/10/2025 14:03:35 (*Agendado*) para 12/10/2025 08:24:55
+  (`Em andamento`), Tini de 0:57:32 para 115:18:52 (42:53:57 comerciais),
+  FAIA de 0 para 15,559667; Tsol de 121:16:31 para 5:57:39;
+- maiores quedas de FARC: 1651174 (396,050167 → 0; 6331 h em `Agendado` dentro
+  da posse), 1650826 (42,310278 → 0), 1667813 (43,333278 → 24,579889),
+  1645571 (32,583389 → 24,062722), 1651064 (25,068833 → 0);
+- totais em 12 meses: FAIA 0 → 15,559667; FARC TCU 848,385834 → 733,386167
+  (`FECHAMENTO`) e 1297,433834 → 785,208056 (`RESOLUCAO`); FARC 24x7
+  572,674000 → 571,918334. Maio/2026 sem mudança de índice.
+
+Validação: Tini, Início e Tsol conferidos com cálculo independente em Python
+(293/293); invariantes Tini = comerciais + não comerciais, Tsol = comerciais +
+não comerciais, Tsol + Tempo suspenso = posse até a Resolução e excessos ≥ 0 em
+293/293; os dois modos dão os mesmos valores para o mesmo chamado; Power BI x
+referência sem diferença nas 38 colunas.
+
+SHA256 do motor (bloco com fim de linha LF):
+`242e8c90bd104069fb667362187d6e6460a2cbdbdc9c40a5e0563175bb2f1caa`.
+
+### 2026-10-05 — revisão Decision x Virtual: status ativos, fallback da captura, SOLN e reabertura
+
+Revisão pedida antes do commit, com a Decision lida pelo código
+(`queries/consulta_faia_farc.sql`, sem alteração).
+
+**Status ativos.** A Decision tem duas listas:
+
+- `#RegrasStatus_DEC` (linhas 222–263), usada pelo motor [8] do
+  `Tempo Total Decision` e do `Tempo suspenso`: ativos `Aberto, aguarda
+  atendimento`, `Aguarda atendimento`, `Em andamento`, `Reaberto`;
+- motor [9.2] do `Tempo de Atendimento` (linhas 3324–3446), que gera
+  `Tempo Atendimento Excedido`, `Meta Atendimento` e `FARC`: ativos só os destinos
+  `Em andamento` e `Aberto, aguarda atendimento` (comentário do bloco: "Pausa
+  status como Agendado, Aguarda atendimento, Em homologacao e Em teste na TI");
+  em [9.3], a regra se chama `STATUS_ATIVO_ABERTO_FILA_E_EM_ANDAMENTO`.
+
+`Tsol` = `Tempo de Atendimento`, por isso a Virtual mantém a lista do [9.2].
+Medição na Virtual (12 meses, 293 SDMs, posse até a Resolução):
+
+- `Aguarda atendimento`: 292 SDMs, 467:58:43. Desse tempo, 206:21:57 ficam antes
+  do Início (fila depois da transferência, já medida no Tini) e 261:36:46
+  depois do Início, em 25 SDMs;
+- `Reaberto`: existe no cadastro (`REAB`, `hold = 0`) e chega pelo registro `RO`;
+  na posse aparece só em 1660920, por 6 segundos;
+- com a lista de 4 ativos, Tsol mudaria em 292 SDMs (+467:58:49), Excesso
+  Resolução e FARC em 18, e nenhuma `Meta Atendimento`. FARC de 12 meses:
+  1354,468167 → 1357,334500. Não aplicado: a Decision não conta esses status no
+  Tempo de Atendimento.
+
+**Fallback da captura.** Decision [4]: `COALESCE(1º ST para 'Em andamento' após
+a entrada, 1ª atividade após a entrada exceto TR)`; em [7.1], sem nenhum dos
+dois, a captura é o início da contagem (Tempo Primeiro Atendimento 0). Portado
+com o mesmo critério de posse do Início. Hoje nenhum dos 293 chamados depende
+dele (todos têm `Em andamento` na posse). Teste com a captura por status
+desligada: os 293 caíram no fallback de atividade; Início e Tini iguais ao
+modelo independente em 293/293.
+
+**Linha de status: RO, CL e SOLN.** A revisão achou transições que a Virtual não
+lia. O SDM grava `Status alterado de` também em `RO` (reabertura) e `CL`, e o
+`SOLN` muda o status sem gravar a transição. Em 1660920, o `SOLN` de
+01/12/2025 18:03:15 encerrou o chamado, que foi reaberto (`RO`,
+`Resolvido, concluído` → `Reaberto`) em 02/12 19:17:32. A Virtual contava as
+25:14:23 entre um e outro como `Em andamento`. Agora toda transição textual
+entra na linha de status, e o `SOLN` entra como passagem para status não ativo,
+como na Decision [8.2].
+
+Efeito (contra o estado anterior desta mesma rodada):
+
+| SDM | Tsol | Excesso Resolução | Indice FARC |
+|---|---|---|---|
+| 1660920 | 360:26:46 → 335:12:23 | 96:26:46 → 83:12:23 | 19,289222 → 16,641278 |
+| 1644896 | 244:08:52 → 244:06:02 | 16:08:52 → 16:06:02 | 3,229556 → 3,220111 |
+| 1645103 | 237:10:23 → 237:10:18 | 9:10:23 → 9:10:18 | 1,834611 → 1,834333 |
+| 1647146 | 73:33:43 → 73:33:38 | 49:33:43 → 49:33:38 | 19,824778 → 19,824222 |
+| 1646289, 1646977, 1647203, 1648168 | −4 a −16 s | sem excesso | 0 |
+
+Os 7 casos menores têm `SOLN` segundos antes da `resolve_date`. Nenhum Início,
+Tini, FAIA ou meta mudou. A população é a mesma nos dois modos, em todas as
+janelas.
+
+Totais de 12 meses (contra `52b9b93`):
+
+| Indicador | Antes | Depois |
+|---|---|---|
+| FAIA | 0 | 15,559667 |
+| FARC `FECHAMENTO` | 1421,059834 | 1302,646278 |
+| FARC `RESOLUCAO` | 1870,107834 | 1354,468167 |
+
+Validação:
+
+- modelo Python independente = SQL em Início, Tini, Tsol e Tempo suspenso
+  (293/293);
+- `Tsol + Tempo suspenso` = posse até a Resolução (293/293);
+- os dois modos dão os mesmos valores;
+- Power BI x referência sem diferença.
+
+O SHA `242e8c90…` registrado na intervenção anterior foi um estado intermediário
+desta rodada, sem commit.
+
+SHA256 do motor (bloco com fim de linha LF):
+`265dcbd07712839dff5b426f2a6e05bc3c8acfef55e91ac936cc8625b5c09519`.
