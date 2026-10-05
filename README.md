@@ -32,7 +32,7 @@ repositórios próprios.
 ## Consulta de referência
 
 [`queries/consulta_virtual_faia_farc.sql`](queries/consulta_virtual_faia_farc.sql)
-devolve dois resultados, com as mesmas 37 colunas:
+devolve dois resultados, com as mesmas 38 colunas:
 
 | Resultado | Conteúdo |
 |---|---|
@@ -73,7 +73,8 @@ Em resumo:
 - **Colunas:** identificação e datas (com `Data/Hora Fechamento`), as 15
   colunas de apuração da Virtual e colunas de contexto no padrão da Decision,
   entre elas `Item de Configuração` e `Categoria`, que identificam o serviço ou
-  o objeto atendido.
+  o objeto atendido. A última coluna, `Grupo`, é o grupo atual do chamado no
+  SDM (`call_req.group_id`); é informativa e não é a posse histórica da Virtual.
   `Tempo suspenso` vale `0:00:00`, porque a regra da Virtual não tem status
   que suspendam a contagem. As durações saem como `[h]:mm:ss`; fatores e
   índices são numéricos e calculados em segundos.
@@ -89,8 +90,8 @@ temporárias.
 
 | Arquivo | Saída |
 |---|---|
-| [`powerbi/consulta_virtual_chamados_tcu_power_bi.sql`](powerbi/consulta_virtual_chamados_tcu_power_bi.sql) | `Chamados_TCU`, com as mesmas 37 colunas da referência |
-| [`powerbi/consulta_virtual_chamados_24x7_power_bi.sql`](powerbi/consulta_virtual_chamados_24x7_power_bi.sql) | `Chamados_24x7`, com as mesmas 37 colunas da referência |
+| [`powerbi/consulta_virtual_chamados_tcu_power_bi.sql`](powerbi/consulta_virtual_chamados_tcu_power_bi.sql) | `Chamados_TCU`, com as mesmas 38 colunas da referência |
+| [`powerbi/consulta_virtual_chamados_24x7_power_bi.sql`](powerbi/consulta_virtual_chamados_24x7_power_bi.sql) | `Chamados_24x7`, com as mesmas 38 colunas da referência |
 
 O período é automático: os últimos `@CoberturaMeses` meses (padrão **12**) mais
 o mês corrente, pela data escolhida em `@DataReferencia` (padrão `FECHAMENTO`),

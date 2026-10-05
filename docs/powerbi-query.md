@@ -29,7 +29,7 @@ O bloco é **idêntico byte a byte** nos três arquivos. SHA256 do bloco, com fi
 linha LF:
 
 ```text
-3486b3440d54f753d48a5311729aba5ad1b2b02ece97a7a691ed5b1b80caaab9
+4b51f86c3d6c9f95be1f131c27fbaa5b767404d6e18b10a8cdc411a6cc4e5dda
 ```
 
 Ele recebe só `@DataInicio`, `@DataFim` e `@DataReferencia` e entrega a
@@ -40,7 +40,7 @@ tabela `#Virt_Saida`, com os dois regimes. Os arquivos diferem apenas em:
 | Período | `@DataInicio` / `@DataFim` digitados | calculado a partir de hoje (seção 4) |
 | Saída | dois resultados (TCU e 24x7) | um arquivo por regime |
 
-As três consultas têm as mesmas 37 colunas, na mesma ordem.
+As três consultas têm as mesmas 38 colunas, na mesma ordem.
 
 Qualquer mudança de regra é feita no bloco da referência e copiada para os dois
 arquivos do Power BI. Depois da cópia, os três blocos devem continuar idênticos.
@@ -93,7 +93,7 @@ modo lê o `act_log` de todos os chamados resolvidos na janela.
 
 ## 5. Saída
 
-As mesmas 37 colunas da referência, na mesma ordem:
+As mesmas 38 colunas da referência, na mesma ordem:
 
 | # | Coluna | Unidade |
 |---|---|---|
@@ -134,6 +134,7 @@ As mesmas 37 colunas da referência, na mesma ordem:
 | 35 | Acordo Qualidade | `-` |
 | 36 | Justificativa | `-` |
 | 37 | Meta Atendimento | `Atende` / `Não Atende` / `N/A` |
+| 38 | Grupo | texto: grupo atual do chamado no SDM (vazio sem grupo) |
 
 Uma linha por chamado. Os blocos e a origem de cada coluna estão em
 [virtual-calculation.md, seção 8](virtual-calculation.md#8-mapa-das-colunas).
@@ -149,6 +150,10 @@ Os tempos contam só as janelas de posse da Virtual, a partir da primeira
 entrada no grupo (ver
 [virtual-calculation.md, seção 7.1](virtual-calculation.md#71-janelas-de-posse-da-virtual)).
 
+`Grupo` é o grupo atual do chamado no SDM (`call_req.group_id`), só para
+análise: não é a posse histórica da Virtual. No modo `RESOLUCAO` pode trazer
+outro grupo, quando o chamado foi resolvido na Virtual e depois transferido.
+
 Os chamados vêm todos juntos. Para separar por serviço ou objeto atendido,
 use os campos do próprio chamado, como `Item de Configuração` e `Categoria`.
 Para o total de FAIA ou FARC de um mês, some `Indice FAIA` ou `Indice FARC`
@@ -160,7 +165,7 @@ Com o mesmo período, as duas consultas do Power BI têm as mesmas linhas e os
 mesmos valores dos dois resultados da referência com a mesma
 `@DataReferencia`. Conferido em maio/2026 (19 chamados com `FECHAMENTO`, 23 com
 `RESOLUCAO`) e na janela de 12 meses até 05/10/2026 (275 com `FECHAMENTO`, 293
-com `RESOLUCAO`): nenhuma diferença nas 37 colunas.
+com `RESOLUCAO`): nenhuma diferença nas 38 colunas.
 
 Para conferir, troque no arquivo do Power BI as duas linhas que calculam
 `@DataInicio` e `@DataFim` por datas fixas iguais às da referência.

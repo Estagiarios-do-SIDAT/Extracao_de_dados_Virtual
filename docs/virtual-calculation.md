@@ -28,7 +28,7 @@ consulta. Não há dependência de arquivo externo.
 
 ## 1. Saída
 
-Uma execução devolve **dois resultados**, com as mesmas 37 colunas:
+Uma execução devolve **dois resultados**, com as mesmas 38 colunas:
 
 | Resultado | Conteúdo |
 |---|---|
@@ -53,6 +53,7 @@ Uma linha por chamado. As colunas vêm em três blocos (lista completa na seçã
 | A — identificação e datas | 1 a 9: do `ID Chamado` até `Data/Hora Fechamento` |
 | B — apuração da Virtual | 10 a 24: `Tini (h)` até `Indice FAIA` |
 | C — contexto no padrão da Decision | 25 a 37: `Status` até `Meta Atendimento` |
+| D — grupo atual | 38: `Grupo` |
 
 Os chamados vêm todos juntos, separados só pelo regime. Para distinguir o
 serviço ou o objeto atendido, use os dados do próprio chamado:
@@ -164,6 +165,13 @@ status posterior sem marca de resolvido, vale o último evento `RE`, salvo se o
 chamado estiver em atendimento aberto. Nos chamados do escopo, `resolve_date`
 coincide com a última entrada em `Em homologação` dentro da posse da Virtual,
 com no máximo 1 segundo de diferença de gravação.
+
+**Grupo.** A coluna `Grupo` mostra o grupo associado ao chamado no SDM no
+momento da consulta (`call_req.group_id`, pelo nome em `ca_contact`): para
+chamado fechado, o grupo final; para chamado ainda aberto, o grupo atual. É
+informativa e diferente das janelas históricas de posse: não define escopo,
+período, responsabilidade nem tempos. Um chamado resolvido na Virtual e depois
+devolvido ao COI aparece no modo `RESOLUCAO` com `Grupo = COI` (ex.: 1651174).
 
 **Resolução x Fechamento.** São marcos diferentes: a resolução é a entrega da
 Virtual; o fechamento é o encerramento do chamado no SDM. Qual dos dois define
@@ -333,6 +341,7 @@ a partir do texto.
 | 35 | Acordo Qualidade | — | `-` |
 | 36 | Justificativa | — | `-` |
 | 37 | Meta Atendimento | 19 | `Atende` / `Não Atende` / `N/A` |
+| 38 | Grupo | `call_req.group_id` → `ca_contact.last_name` | grupo atual do chamado no SDM; vazio sem grupo (seção 4) |
 
 ## 9. Totais
 

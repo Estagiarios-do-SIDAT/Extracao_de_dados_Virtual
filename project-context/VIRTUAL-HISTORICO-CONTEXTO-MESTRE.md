@@ -65,7 +65,7 @@ O nome do arquivo não marca o fim real do período: a planilha
 | Posse | relógio começa na 1ª entrada na Virtual (abertura, se nasceu nela); saídas pausam, reentradas reativam, janelas somadas | janelas de posse da Decision ([8.1]); decisão de 2026-10-02 |
 | Fechamento | `Data/Hora Fechamento` = `close_date` (= evento CL, ±1 s) | 265 chamados do escopo com CL: 258 no mesmo segundo, 7 com 1 s de diferença de gravação |
 | Formato | 10 durações em texto `[h]:mm:ss`; cálculo em segundos; fatores e índices numéricos | igual às planilhas |
-| Saída | uma consulta de referência com dois result sets de 37 colunas (blocos A, B e C), um por regime; Power BI em dois arquivos, um por regime, com as mesmas 37 colunas | motor único, bloco idêntico nos três arquivos |
+| Saída | uma consulta de referência com dois result sets de 38 colunas (blocos A, B, C e a coluna final `Grupo`), um por regime; Power BI em dois arquivos, um por regime, com as mesmas 38 colunas | motor único, bloco idêntico nos três arquivos |
 
 ## 4. Identidades no SDM
 
@@ -402,3 +402,19 @@ SHA256 do motor (bloco com fim de linha LF):
   de valor nos chamados que já existiam.
 - SHA256 do motor (bloco com fim de linha LF):
   `3486b3440d54f753d48a5311729aba5ad1b2b02ece97a7a691ed5b1b80caaab9`.
+
+### 2026-10-05 — coluna `Grupo`
+
+- Incluída a coluna final `Grupo` (posição 38): `call_req.group_id` resolvido
+  pelo nome em `ca_contact.last_name` (chave primária `contact_uuid`, a mesma
+  junção já usada para o grupo inicial). Sem grupo, sai vazia. Desde 2025,
+  todo `group_id` preenchido tem nome no cadastro e é um grupo
+  (`contact_type` 2308).
+- É informativa: mostra o grupo atual/final do chamado no SDM e não muda
+  escopo, período, posse nem cálculo. 1651174 (resolvido na Virtual, fechado no
+  COI) aparece em `RESOLUCAO` com `Grupo = COI`.
+- Validação contra `af5a27a`: mesmos SDMs em maio, 30/09–06/10 e 12 meses, nos
+  dois modos; 0 diferenças nas 37 colunas anteriores; nenhuma linha duplicada;
+  Power BI x referência sem diferença nas 38 colunas.
+- SHA256 do motor (bloco com fim de linha LF):
+  `4b51f86c3d6c9f95be1f131c27fbaa5b767404d6e18b10a8cdc411a6cc4e5dda`.

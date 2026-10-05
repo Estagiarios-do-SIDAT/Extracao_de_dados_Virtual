@@ -346,6 +346,7 @@ SELECT
     p.log_agent,
     p.assignee,
     p.affected_rc,
+    p.group_id,
     CASE p.[type] WHEN 'I' THEN N'Incidente' WHEN 'R' THEN N'Solicitação' END AS tipo,
     p.priority AS prioridade,
     p.open_date AS abertura_epoch,
@@ -497,6 +498,7 @@ SELECT
     c.log_agent,
     c.assignee,
     c.affected_rc,
+    c.group_id,
     c.tipo,
     c.prioridade,
     pr.Regime AS regime,
@@ -741,7 +743,10 @@ SELECT
     N'-' AS [Justificativa],
     CASE WHEN c.exc_sol_s IS NULL THEN N'N/A'
          WHEN c.exc_sol_s > 0 THEN N'Não Atende'
-         ELSE N'Atende' END AS [Meta Atendimento]
+         ELSE N'Atende' END AS [Meta Atendimento],
+    -- Grupo atual do chamado no SDM (call_req.group_id), pelo nome do cadastro.
+    -- Informativo: nao e a posse historica nem participa do escopo.
+    LTRIM(RTRIM(grp.last_name)) AS [Grupo]
 INTO #Virt_Saida
 FROM #Virt_Marco AS m
 JOIN #Virt_Calculo AS c
@@ -757,6 +762,8 @@ LEFT JOIN dbo.ca_contact AS asg
     ON asg.contact_uuid = m.assignee
 LEFT JOIN dbo.ca_owned_resource AS ic
     ON ic.own_resource_uuid = m.affected_rc
+LEFT JOIN dbo.ca_contact AS grp
+    ON grp.contact_uuid = m.group_id
 -- [h]:mm:ss a partir de segundos inteiros: horas = s / 3600 (sem limite de 24),
 -- minutos = (s % 3600) / 60, segundos = s % 60.
 CROSS APPLY (
@@ -816,7 +823,8 @@ SELECT
     [Acordo Prazo],
     [Acordo Qualidade],
     [Justificativa],
-    [Meta Atendimento]
+    [Meta Atendimento],
+    [Grupo]
 FROM #Virt_Saida
 WHERE Aba = N'Chamados_TCU'
 ORDER BY [Data/Hora Fechamento], [ID Chamado];
