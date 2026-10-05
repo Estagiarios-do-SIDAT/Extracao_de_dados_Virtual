@@ -43,19 +43,29 @@ Parâmetros no topo do arquivo:
 
 | Parâmetro | Uso |
 |---|---|
-| `@DataInicio` | início do período de fechamento, inclusivo (horário do Brasil) |
-| `@DataFim` | fim do período de fechamento, **exclusivo** |
+| `@DataInicio` | início do período, inclusivo (horário do Brasil) |
+| `@DataFim` | fim do período, **exclusivo** |
+| `@DataReferencia` | `N'FECHAMENTO'` (padrão) ou `N'RESOLUCAO'`: qual data define o período |
 
-O período seleciona os chamados pela **data de fechamento**. Para um mês inteiro,
+`@DataReferencia` escolhe o marco da apuração. Para trocar, mude só essa
+linha; nenhum cálculo muda. Outro valor interrompe a consulta com erro.
+
+| Modo | Período por | Exige | Responsabilidade da Virtual validada em |
+|---|---|---|---|
+| `FECHAMENTO` | `close_date` | fechamento | fechamento (encerrou na Virtual) |
+| `RESOLUCAO` | `resolve_date` | resolução (`close_date` pode estar vazio) | instante da resolução (dentro de uma janela de posse) |
+
+Para um mês inteiro,
 use o dia 1 do mês e o dia 1 do mês seguinte, por exemplo `2026-07-01` e
 `2026-08-01`. Nunca use `23:59:59`.
 
 Em resumo:
 
-- **Escopo:** chamados I/R fechados no período, em status terminal, com grupo
-  atual `Fornecedores - Virtual` e que encerraram na Virtual (última
-  transferência de grupo foi uma entrada na Virtual, ou nasceram nela sem
-  transferência).
+- **Escopo:** chamados I/R do período. Em `FECHAMENTO`: fechados, em status
+  terminal, com grupo atual `Fornecedores - Virtual` e que encerraram na
+  Virtual (última transferência de grupo foi uma entrada na Virtual, ou
+  nasceram nela sem transferência). Em `RESOLUCAO`: resolvidos dentro de uma
+  janela de posse da Virtual, fechados ou não.
 - **Regime:** TCU ou 24x7, pela combinação Tipo + Prioridade.
 - **Posse:** o relógio começa na primeira entrada na Virtual (na abertura, se
   o chamado nasceu nela), para nas saídas e volta nas reentradas; todas as
@@ -83,7 +93,8 @@ temporárias.
 | [`powerbi/consulta_virtual_chamados_24x7_power_bi.sql`](powerbi/consulta_virtual_chamados_24x7_power_bi.sql) | `Chamados_24x7`, com as mesmas 37 colunas da referência |
 
 O período é automático: os últimos `@CoberturaMeses` meses (padrão **12**) mais
-o mês corrente, por data de fechamento.
+o mês corrente, pela data escolhida em `@DataReferencia` (padrão `FECHAMENTO`),
+declarada no topo de cada arquivo.
 
 O bloco de cálculo (`MOTOR VIRTUAL`) é idêntico nos três arquivos. Mudanças de
 regra são feitas na referência e copiadas para os dois arquivos do Power BI.
@@ -98,7 +109,7 @@ Power BI.
 
 ## Como validar
 
-1. Rode a referência com o período de fechamento do mês.
+1. Rode a referência com o período do mês.
 2. Confira, por SDM, os marcos (abertura, entrada na Virtual, início,
    resolução, fechamento) e as janelas de posse contra o `act_log` do chamado.
    A consulta `support/consulta_logs_chamados_listados.sql` lista todos os

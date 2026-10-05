@@ -14,6 +14,11 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 -- =============================================================================
 DECLARE @CoberturaMeses int = 12;
 
+-- Data que define a janela (troque so esta linha):
+--   N'FECHAMENTO' = Data/Hora Fechamento (call_req.close_date)
+--   N'RESOLUCAO'  = Data/Hora Resolucao  (call_req.resolve_date)
+DECLARE @DataReferencia nvarchar(20) = N'FECHAMENTO';
+
 --------------------------------------------------------------------------------
 -- Power BI - Chamados_TCU - Virtual
 --
@@ -27,7 +32,7 @@ DECLARE @CoberturaMeses int = 12;
 -- inteiro em 'Instrucao SQL'.
 --------------------------------------------------------------------------------
 
--- Janela por data de FECHAMENTO, horario do Brasil, semiaberta:
+-- Janela pela data escolhida em @DataReferencia, horario do Brasil, semiaberta:
 --   inicio = dia 1 do mes (corrente - @CoberturaMeses), 00:00
 --   fim    = amanha 00:00, para o dia de hoje entrar inteiro
 DECLARE @HojeBrasil date = CONVERT(date, DATEADD(HOUR, -3, SYSUTCDATETIME()));
@@ -36,8 +41,14 @@ DECLARE @DataInicio datetime2(0) =
 DECLARE @DataFim datetime2(0) = CONVERT(datetime2(0), DATEADD(DAY, 1, @HojeBrasil));
 
 -- >>> MOTOR VIRTUAL ------------------------------------------------------------
--- Bloco identico nos tres arquivos (queries/ e powerbi/). Usa so @DataInicio e
--- @DataFim (janela de FECHAMENTO) e entrega #Virt_Saida com os dois regimes.
+-- Bloco identico nos tres arquivos (queries/ e powerbi/). Usa so @DataInicio,
+-- @DataFim e @DataReferencia e entrega #Virt_Saida com os dois regimes.
+
+IF @DataReferencia IS NULL OR @DataReferencia NOT IN (N'RESOLUCAO', N'FECHAMENTO')
+BEGIN
+    RAISERROR(N'Valor inválido para @DataReferencia. Use RESOLUCAO ou FECHAMENTO.', 16, 1);
+    RETURN;
+END;
 
 DECLARE @HorasBrasilParaUTC int = 3;
 DECLARE @Epoch datetime2(0) = '1970-01-01 00:00:00';
@@ -139,9 +150,13 @@ VALUES
     ('2026-12-31', N'Facultativo', N'Véspera de Ano Novo',      N'N');
 
 --------------------------------------------------------------------------------
--- [3] Chamados fechados no periodo, no escopo do fornecedor: I/R, status
---     terminal e grupo atual 'Fornecedores - Virtual'. Mesma lista de status
---     terminais da Decision, lida por codigo.
+-- [3] Candidatos do periodo, conforme @DataReferencia. Sem substituicao entre
+--     as datas: se a data do modo estiver vazia, o chamado nao entra.
+--     FECHAMENTO: close_date no periodo, I/R, status terminal (mesma lista da
+--       Decision, por codigo) e grupo atual 'Fornecedores - Virtual'.
+--     RESOLUCAO: resolve_date no periodo, I/R, com grupo atual Virtual ou
+--       alguma transferencia de grupo para a Virtual. A exigencia de a
+--       resolucao ter ocorrido na posse da Virtual e aplicada em [6.2].
 --------------------------------------------------------------------------------
 IF OBJECT_ID('tempdb..#Virt_Periodo') IS NOT NULL DROP TABLE #Virt_Periodo;
 SELECT
@@ -162,27 +177,50 @@ SELECT
     LTRIM(RTRIM(CONVERT(nvarchar(4000), r.summary))) AS resumo
 INTO #Virt_Periodo
 FROM dbo.call_req AS r
-WHERE r.close_date >= @IniEpoch
-  AND r.close_date <  @FimEpoch
-  AND r.group_id = @GrupoVirtual
-  AND r.[type] IN ('I', 'R')
-  AND r.status IN (
-        'CL',        -- Resolvido, concluido
-        'CLD',       -- Fechado, Solucao Implantada
-        'CLUNRSLV',  -- Nao resolvido, fechado
-        'CNCL',      -- Cancelada
-        'ATGR',      -- Cancelado
-        'END',       -- Encerrado
-        'PC',        -- Fechado, solucao nao implantada
-        'RE',        -- Resolvido, Solucao Definida
-        'VARES'      -- Resolvido pelo VA
-      );
+WHERE r.[type] IN ('I', 'R')
+  AND (
+        (    @DataReferencia = N'FECHAMENTO'
+         AND r.close_date IS NOT NULL
+         AND r.close_date >= @IniEpoch
+         AND r.close_date <  @FimEpoch
+         AND r.group_id = @GrupoVirtual
+         AND r.status IN (
+                'CL',        -- Resolvido, concluido
+                'CLD',       -- Fechado, Solucao Implantada
+                'CLUNRSLV',  -- Nao resolvido, fechado
+                'CNCL',      -- Cancelada
+                'ATGR',      -- Cancelado
+                'END',       -- Encerrado
+                'PC',        -- Fechado, solucao nao implantada
+                'RE',        -- Resolvido, Solucao Definida
+                'VARES'      -- Resolvido pelo VA
+             )
+        )
+     OR (    @DataReferencia = N'RESOLUCAO'
+         AND r.resolve_date IS NOT NULL
+         AND r.resolve_date >= @IniEpoch
+         AND r.resolve_date <  @FimEpoch
+         AND (    r.group_id = @GrupoVirtual
+               OR EXISTS (
+                      SELECT 1
+                      FROM dbo.act_log AS al
+                      WHERE al.call_req_id = r.persid
+                        AND al.[type] = 'TR'
+                        AND CONVERT(nvarchar(4000), al.[description])
+                            LIKE N'%Transferir Grupo de %para ''' + @GrupoVirtualNome + N'''%'
+                  )
+             )
+        )
+      )
+OPTION (RECOMPILE);
 CREATE UNIQUE CLUSTERED INDEX IX_Virt_Periodo ON #Virt_Periodo (id);
 CREATE UNIQUE INDEX IX_Virt_Periodo_persid ON #Virt_Periodo (persid);
 
 --------------------------------------------------------------------------------
--- [4] Eventos de grupo e de status desses chamados, da abertura ao fechamento,
---     com os nomes extraidos do texto padrao do act_log:
+-- [4] Eventos de grupo e de status desses chamados, da abertura ao fechamento
+--     (sem fechamento: todos os eventos registrados; o calculo termina nos
+--     marcos, nunca na data atual), com os nomes extraidos do texto padrao do
+--     act_log:
 --       TR: "Transferir Grupo de 'X' para 'Y'"
 --       ST/RE: "Status alterado de 'X' para 'Y'."
 --     Transferencia so de responsavel nao tem grupo_de/grupo_para e nao muda a
@@ -233,7 +271,7 @@ CROSS APPLY (
 ) AS st
 WHERE al.[type] IN ('TR', 'ST', 'RE')
   AND al.system_time >= p.open_date
-  AND al.system_time <= p.close_date;
+  AND (p.close_date IS NULL OR al.system_time <= p.close_date);
 CREATE CLUSTERED INDEX IX_Virt_Log ON #Virt_Log (id, system_time, log_id);
 
 --------------------------------------------------------------------------------
@@ -295,9 +333,9 @@ WHERE l.grupo_de = @GrupoVirtualNome
 CREATE CLUSTERED INDEX IX_Virt_Movimento ON #Virt_Movimento (id, movimento, momento);
 
 --------------------------------------------------------------------------------
--- [6] Chamados da Virtual (encerrados na Virtual) e os marcos.
+-- [6] Candidatos com os marcos e o indicador de encerramento na Virtual.
 --------------------------------------------------------------------------------
-IF OBJECT_ID('tempdb..#Virt_Chamado') IS NOT NULL DROP TABLE #Virt_Chamado;
+IF OBJECT_ID('tempdb..#Virt_Candidato') IS NOT NULL DROP TABLE #Virt_Candidato;
 SELECT
     p.id,
     p.persid,
@@ -317,8 +355,14 @@ SELECT
         p.resolve_date,
         CASE WHEN NOT (sa.resolved = 0 AND sa.hold = 0) THEN re.ultimo_re END
     ) AS resolucao_epoch,
-    p.close_date AS fechamento_epoch
-INTO #Virt_Chamado
+    p.close_date AS fechamento_epoch,
+    p.resolve_date AS resolve_date_sdm,
+    -- Encerrou na Virtual: sem transferencia de grupo (nasceu e ficou nela) ou a
+    -- ultima transferencia de grupo ate o fechamento foi uma entrada na Virtual.
+    CASE WHEN (gi.grupo_ultima_transferencia IS NULL AND gi.grupo_inicial = @GrupoVirtualNome)
+           OR gi.grupo_ultima_transferencia = @GrupoVirtualNome
+         THEN 1 ELSE 0 END AS encerrou_virtual
+INTO #Virt_Candidato
 FROM #Virt_Periodo AS p
 JOIN #Virt_GrupoInicial AS gi
     ON gi.id = p.id
@@ -364,11 +408,79 @@ OUTER APPLY (
     FROM #Virt_Log AS l
     WHERE l.id = p.id
       AND l.[type] = 'RE'
-) AS re
--- Encerrou na Virtual: sem transferencia de grupo (nasceu e ficou nela) ou a
--- ultima transferencia de grupo foi uma entrada na Virtual.
-WHERE (gi.grupo_ultima_transferencia IS NULL AND gi.grupo_inicial = @GrupoVirtualNome)
-   OR gi.grupo_ultima_transferencia = @GrupoVirtualNome;
+) AS re;
+CREATE UNIQUE CLUSTERED INDEX IX_Virt_Candidato ON #Virt_Candidato (id);
+
+--------------------------------------------------------------------------------
+-- [6.1] Janelas de posse da Virtual.
+--     Linha do tempo de grupo: a abertura (no grupo inicial) e cada
+--     transferencia de grupo, em ordem de system_time e act_log.id. Cada trecho
+--     vai de um evento ao seguinte; ficam os trechos em que o grupo e o Virtual.
+--     Fora da Virtual nao conta; saida para o relogio; reentrada o religa;
+--     todas as janelas sao somadas. Quem nasceu na Virtual tem a primeira
+--     janela iniciando na abertura. Janela sem fim (fim NULL) = o chamado
+--     continuava na Virtual no ultimo evento lido.
+--------------------------------------------------------------------------------
+IF OBJECT_ID('tempdb..#Virt_LinhaGrupo') IS NOT NULL DROP TABLE #Virt_LinhaGrupo;
+SELECT
+    c.id,
+    c.abertura_epoch AS momento,
+    0 AS ordem,
+    CASE WHEN gi.grupo_inicial = @GrupoVirtualNome THEN 1 ELSE 0 END AS na_virtual
+INTO #Virt_LinhaGrupo
+FROM #Virt_Candidato AS c
+JOIN #Virt_GrupoInicial AS gi
+    ON gi.id = c.id
+UNION ALL
+SELECT
+    l.id,
+    l.system_time,
+    l.log_id,
+    CASE WHEN l.grupo_para = @GrupoVirtualNome THEN 1 ELSE 0 END
+FROM #Virt_Log AS l
+JOIN #Virt_Candidato AS c
+    ON c.id = l.id
+WHERE l.grupo_para IS NOT NULL;
+
+IF OBJECT_ID('tempdb..#Virt_Janela') IS NOT NULL DROP TABLE #Virt_Janela;
+SELECT
+    x.id,
+    ROW_NUMBER() OVER (PARTITION BY x.id ORDER BY x.momento, x.ordem) AS passagem,
+    x.momento AS ini_epoch,
+    x.proximo AS fim_epoch,
+    DATEADD(HOUR, -@HorasBrasilParaUTC, DATEADD(SECOND, x.momento, @Epoch)) AS ini,
+    DATEADD(HOUR, -@HorasBrasilParaUTC, DATEADD(SECOND, x.proximo, @Epoch)) AS fim -- NULL = ainda na Virtual
+INTO #Virt_Janela
+FROM (
+    SELECT
+        g.id, g.momento, g.ordem, g.na_virtual,
+        LEAD(g.momento) OVER (PARTITION BY g.id ORDER BY g.momento, g.ordem) AS proximo
+    FROM #Virt_LinhaGrupo AS g
+) AS x
+WHERE x.na_virtual = 1
+  AND (x.proximo IS NULL OR x.proximo > x.momento);
+CREATE CLUSTERED INDEX IX_Virt_Janela ON #Virt_Janela (id, passagem);
+
+--------------------------------------------------------------------------------
+-- [6.2] Chamados da Virtual: responsabilidade validada no marco escolhido.
+--     FECHAMENTO: encerrou na Virtual (cadeia de transferencias ate o
+--       fechamento).
+--     RESOLUCAO: resolve_date dentro de uma janela de posse da Virtual,
+--       limites inclusivos; janela sem fim vale ate qualquer instante posterior.
+--------------------------------------------------------------------------------
+IF OBJECT_ID('tempdb..#Virt_Chamado') IS NOT NULL DROP TABLE #Virt_Chamado;
+SELECT c.*
+INTO #Virt_Chamado
+FROM #Virt_Candidato AS c
+WHERE (@DataReferencia = N'FECHAMENTO' AND c.encerrou_virtual = 1)
+   OR (@DataReferencia = N'RESOLUCAO'
+       AND EXISTS (
+             SELECT 1
+             FROM #Virt_Janela AS j
+             WHERE j.id = c.id
+               AND c.resolve_date_sdm >= j.ini_epoch
+               AND (j.fim_epoch IS NULL OR c.resolve_date_sdm <= j.fim_epoch)
+       ));
 CREATE UNIQUE CLUSTERED INDEX IX_Virt_Chamado ON #Virt_Chamado (id);
 
 --------------------------------------------------------------------------------
@@ -438,52 +550,8 @@ WHERE DATEDIFF(DAY, '19000101', d.Dia) % 7 < 5
   );
 
 --------------------------------------------------------------------------------
--- [9] Janelas de posse da Virtual.
---     Linha do tempo de grupo: a abertura (no grupo inicial) e cada
---     transferencia de grupo, em ordem de system_time e act_log.id. Cada trecho
---     vai de um evento ao seguinte; ficam os trechos em que o grupo e o Virtual.
---     Fora da Virtual nao conta; saida para o relogio; reentrada o religa;
---     todas as janelas sao somadas. Quem nasceu na Virtual tem a primeira
---     janela iniciando na abertura.
+-- [9] Trechos de posse ate os marcos (janelas montadas em [6.1]).
 --------------------------------------------------------------------------------
-IF OBJECT_ID('tempdb..#Virt_LinhaGrupo') IS NOT NULL DROP TABLE #Virt_LinhaGrupo;
-SELECT
-    c.id,
-    c.abertura_epoch AS momento,
-    0 AS ordem,
-    CASE WHEN gi.grupo_inicial = @GrupoVirtualNome THEN 1 ELSE 0 END AS na_virtual
-INTO #Virt_LinhaGrupo
-FROM #Virt_Chamado AS c
-JOIN #Virt_GrupoInicial AS gi
-    ON gi.id = c.id
-UNION ALL
-SELECT
-    l.id,
-    l.system_time,
-    l.log_id,
-    CASE WHEN l.grupo_para = @GrupoVirtualNome THEN 1 ELSE 0 END
-FROM #Virt_Log AS l
-JOIN #Virt_Chamado AS c
-    ON c.id = l.id
-WHERE l.grupo_para IS NOT NULL;
-
-IF OBJECT_ID('tempdb..#Virt_Janela') IS NOT NULL DROP TABLE #Virt_Janela;
-SELECT
-    x.id,
-    ROW_NUMBER() OVER (PARTITION BY x.id ORDER BY x.momento, x.ordem) AS passagem,
-    DATEADD(HOUR, -@HorasBrasilParaUTC, DATEADD(SECOND, x.momento, @Epoch)) AS ini,
-    DATEADD(HOUR, -@HorasBrasilParaUTC, DATEADD(SECOND, x.proximo, @Epoch)) AS fim -- NULL = ainda na Virtual
-INTO #Virt_Janela
-FROM (
-    SELECT
-        g.id, g.momento, g.ordem, g.na_virtual,
-        LEAD(g.momento) OVER (PARTITION BY g.id ORDER BY g.momento, g.ordem) AS proximo
-    FROM #Virt_LinhaGrupo AS g
-) AS x
-WHERE x.na_virtual = 1
-  AND (x.proximo IS NULL OR x.proximo > x.momento);
-CREATE CLUSTERED INDEX IX_Virt_Janela ON #Virt_Janela (id, passagem);
-
 -- Trechos de cada janela ate o marco: R = ate o Inicio (resposta),
 -- S = ate a Resolucao (resolucao).
 IF OBJECT_ID('tempdb..#Virt_Trecho') IS NOT NULL DROP TABLE #Virt_Trecho;

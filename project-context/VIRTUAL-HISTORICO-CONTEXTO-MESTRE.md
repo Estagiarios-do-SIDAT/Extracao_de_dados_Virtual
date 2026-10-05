@@ -52,7 +52,7 @@ O nome do arquivo não marca o fim real do período: a planilha
 | Tema | Decisão | Base |
 |---|---|---|
 | Escopo | I/R em status terminal (lista da Decision), grupo atual `Fornecedores - Virtual` e **encerrado na Virtual** (última transferência de grupo até o fechamento foi entrada na Virtual, ou nasceu nela sem transferência) | regra do escopo FAIA da Decision ([3.2] de `consulta_faia_farc.sql`); decisão de 2026-10-02 |
-| Período | pelo **fechamento** (`close_date`), semiaberto | regra da Decision ([1] de `consulta_faia_farc.sql`); decisão de 2026-10-02 |
+| Período | data escolhida em `@DataReferencia`, semiaberto, sem substituição entre as datas. `FECHAMENTO` (padrão): `close_date`, status terminal, grupo atual e encerramento na Virtual. `RESOLUCAO`: `resolve_date` dentro de uma janela de posse da Virtual, `close_date` opcional | fechamento: regra da Decision ([1] de `consulta_faia_farc.sql`), decisão de 2026-10-02; chave de troca: 2026-10-05 |
 | DCIM (removida da arquitetura em 2026-10-02) | `log_agent` = automação (`Usuário de Serviço - ServiceDesk`) **e** IC `dcim` | 60/60; coincide com `%AFFECTED_RC=dcim` da mensagem de criação em toda a população de 2025–2026 (267 chamados) |
 | Regime | Parâmetros por Tipo + Prioridade (P1/P2 = 24x7) | nenhum campo do SDM traz o regime |
 | Abertura | `open_date` | exato nas linhas não digitadas à mão |
@@ -202,7 +202,7 @@ idêntico (maio: 23; 12 meses: 290).
 
 | Arquivo | Papel |
 |---|---|
-| `queries/consulta_virtual_faia_farc.sql` | referência: `@DataInicio`, `@DataFim` (fechamento), dois result sets |
+| `queries/consulta_virtual_faia_farc.sql` | referência: `@DataInicio`, `@DataFim`, `@DataReferencia`, dois result sets |
 | `powerbi/consulta_virtual_chamados_tcu_power_bi.sql` | Power BI, regime TCU, janela de `@CoberturaMeses` (12) |
 | `powerbi/consulta_virtual_chamados_24x7_power_bi.sql` | Power BI, regime 24x7 |
 | `docs/virtual-calculation.md` | regra vigente |
@@ -351,3 +351,54 @@ Validação:
 
 SHA256 do motor (bloco com fim de linha LF):
 `37eb665ccc4ffcd0a7cefdf48427bb42830ab42c7d9848fa3093361449e36c73`.
+
+### 2026-10-05 — chave `@DataReferencia` (resolução ou fechamento)
+
+- Criada `@DataReferencia` no topo dos três arquivos, no mesmo espírito da troca
+  `@COI_Antigo` / `@COI_Novo` do COI. `N'FECHAMENTO'` (padrão) filtra o período
+  por `close_date`; `N'RESOLUCAO'`, por `resolve_date`. Outro valor (ou NULL)
+  interrompe a consulta com
+  `Valor inválido para @DataReferencia. Use RESOLUCAO ou FECHAMENTO.`
+- A chave atua só em `#Virt_Periodo` (bloco [3]), por um `CASE` sobre a data
+  escolhida, sem substituição entre as datas. O escopo passou a exigir
+  `close_date` preenchido de forma explícita nos dois modos; todo chamado em
+  status terminal do grupo já tinha `close_date`.
+- Chamados resolvidos e ainda em `Em homologação` (17 em 05/10/2026, todos
+  resolvidos entre 30/09 e 05/10/2026) não entram em nenhum modo até o
+  fechamento.
+- Validação, maio/2026:
+  - `FECHAMENTO`: 19 TCU, 0 24x7 (idêntico ao `e82dd55`);
+  - `RESOLUCAO`: 22 TCU, 1 24x7;
+  - só em `RESOLUCAO`: 1687306, 1704301, 1704841 (24x7), 1704995, 1705168
+    (resolvidos em maio, fechados em junho);
+  - só em `FECHAMENTO`: 1696948 (resolvido em 29/04, fechado em 05/05);
+  - 18 nos dois modos, com 0 diferenças nas 37 colunas.
+- Power BI (12 meses até 05/10/2026): 275 chamados nos dois modos, iguais à
+  referência; `FECHAMENTO` idêntico ao `e82dd55`.
+- SHA256 do motor (bloco com fim de linha LF):
+  `2861ee231b7448dbbb67f77d8c5b841ad4d90d0b403d33ff6f578ade9fe72405`.
+
+### 2026-10-05 — semântica do modo `RESOLUCAO`
+
+- O modo `RESOLUCAO` deixou de exigir `close_date`, status terminal, grupo atual
+  e encerramento na Virtual. Passou a exigir `resolve_date` no período e a
+  resolução dentro de uma janela de posse da Virtual (limites inclusivos;
+  janela aberta vale para instantes posteriores). `FECHAMENTO` ficou como estava.
+- Técnica: `#Virt_Periodo` tem um ramo por modo (`OPTION (RECOMPILE)`); no
+  `RESOLUCAO`, os candidatos são chamados I/R resolvidos no período com grupo
+  atual Virtual ou alguma transferência de grupo para ela. As janelas de posse
+  passaram a ser montadas sobre os candidatos (`#Virt_Candidato`, bloco [6.1])
+  antes da escolha final (`#Virt_Chamado`, bloco [6.2]). O `act_log` é lido até
+  o fechamento ou, sem fechamento, até o último evento registrado; os tempos
+  continuam terminando nos marcos.
+- Os 17 chamados resolvidos e ainda em `Em homologação` (resolução de 30/09 a
+  05/10/2026) foram todos resolvidos dentro de uma janela de posse da Virtual e
+  entram com `RESOLUCAO`; com `FECHAMENTO` continuam fora. 1651174 (resolvido na
+  Virtual em 20/07/2026, fechado no COI) entra só com `RESOLUCAO`; 1644738
+  (resolvido pelo COI depois da saída) não entra em nenhum modo.
+- Validação: `FECHAMENTO` idêntico ao estado anterior em maio, em 30/09–06/10 e
+  em 12 meses; `RESOLUCAO` de maio igual ao anterior (23 chamados); em 12 meses,
+  `RESOLUCAO` passou de 275 para 293 chamados (os 17 e 1651174), sem diferença
+  de valor nos chamados que já existiam.
+- SHA256 do motor (bloco com fim de linha LF):
+  `3486b3440d54f753d48a5311729aba5ad1b2b02ece97a7a691ed5b1b80caaab9`.

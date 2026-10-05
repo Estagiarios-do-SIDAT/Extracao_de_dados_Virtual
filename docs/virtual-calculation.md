@@ -39,8 +39,9 @@ Parâmetros, no topo do arquivo:
 
 | Parâmetro | Significado |
 |---|---|
-| `@DataInicio` | início do período de **fechamento**, inclusivo, horário do Brasil |
-| `@DataFim` | fim do período de fechamento, **exclusivo** |
+| `@DataInicio` | início do período, inclusivo, horário do Brasil |
+| `@DataFim` | fim do período, **exclusivo** |
+| `@DataReferencia` | `N'FECHAMENTO'` (padrão) ou `N'RESOLUCAO'`: data do período e marco em que a responsabilidade da Virtual é validada (seção 2) |
 
 Para um mês inteiro, use o dia 1 do mês e o dia 1 do mês seguinte (por exemplo
 `2026-05-01` e `2026-06-01`). Nunca `23:59:59`.
@@ -60,31 +61,66 @@ responsáveis.
 
 ## 2. Escopo e período
 
-Um chamado entra na apuração quando:
+O período e a validação de responsabilidade dependem de `@DataReferencia`,
+escolhida em uma linha no topo do arquivo:
 
-1. o **fechamento** (`call_req.close_date`) cai em `[@DataInicio, @DataFim)`;
-2. é **Incidente** ou **Solicitação** (`type` `I` ou `R`). Os parâmetros da
-   Virtual não têm Problema nem Mudança;
-3. está em **status terminal**: `CL`, `CLD`, `CLUNRSLV`, `CNCL`, `ATGR`, `END`,
+| Modo | Data do período | Campo obrigatório | Responsabilidade validada em |
+|---|---|---|---|
+| `N'FECHAMENTO'` (padrão) | `Data/Hora Fechamento` (`call_req.close_date`) | `close_date` | fechamento: o chamado encerrou na Virtual |
+| `N'RESOLUCAO'` | `Data/Hora Resolução` (`call_req.resolve_date`) | `resolve_date` (`close_date` pode estar vazio) | instante da resolução: dentro de uma janela de posse da Virtual |
+
+Nos dois modos o chamado precisa ser **Incidente** ou **Solicitação** (`type`
+`I` ou `R`); os parâmetros da Virtual não têm Problema nem Mudança. Não há
+substituição entre as datas: se a data do modo estiver vazia, o chamado não
+entra. Qualquer outro valor de `@DataReferencia` interrompe a consulta com o erro
+*Valor inválido para @DataReferencia. Use RESOLUCAO ou FECHAMENTO.*
+
+**FECHAMENTO.** O chamado entra quando:
+
+1. `close_date` está preenchido e cai em `[@DataInicio, @DataFim)`;
+2. está em **status terminal**: `CL`, `CLD`, `CLUNRSLV`, `CNCL`, `ATGR`, `END`,
    `PC`, `RE` ou `VARES` (a mesma lista da Decision, lida por código);
-4. o **grupo atual** é `Fornecedores - Virtual`;
-5. **encerrou na Virtual**: nasceu na Virtual e nunca teve transferência de
+3. o **grupo atual** é `Fornecedores - Virtual`;
+4. **encerrou na Virtual**: nasceu na Virtual e nunca teve transferência de
    grupo, ou a **última transferência de grupo até o fechamento** foi uma
    entrada na Virtual.
 
-O item 5 é verificado pela cadeia de transferências do `act_log` (`TR`,
+O item 4 é verificado pela cadeia de transferências do `act_log` (`TR`,
 `Transferir Grupo de 'X' para 'Y'`), em ordem de `system_time` e `act_log.id`,
 e não só pelo grupo atual. Um chamado `COI → Virtual → COI → fechamento` não é
 encerramento da Virtual e fica fora.
 
-**Período pelo fechamento.** A abertura pode estar em outro mês:
+**RESOLUCAO.** O chamado entra quando:
 
-| Caso | Exemplo | Mês da apuração |
-|---|---|---|
-| abriu antes, fechou dentro | 1696948: abriu 29/04/2026, fechou 05/05/2026 | maio |
-| abriu dentro, fechou depois | 1704841: abriu 28/05/2026, fechou 03/06/2026 | junho |
+1. `resolve_date` está preenchido e cai em `[@DataInicio, @DataFim)`;
+2. passou pela Virtual (grupo atual Virtual ou alguma transferência de grupo
+   para ela);
+3. **a resolução ocorreu dentro de uma janela de posse da Virtual**:
+   `resolve_date` maior ou igual ao início de uma janela e menor ou igual ao
+   fim dela; janela ainda aberta vale para qualquer instante posterior ao
+   início.
 
-Chamado ainda sem fechamento não aparece.
+Não se exige fechamento, status terminal nem grupo atual: entra o chamado
+resolvido no período e ainda em `Em homologação`, e entra o chamado resolvido
+na Virtual e depois devolvido ao COI. Um chamado resolvido pelo COI depois de
+sair da Virtual fica fora.
+
+A chave só muda **quais chamados entram**. Marcos, janelas de posse, tempos,
+metas, excessos, índices, regime e as colunas de data continuam iguais para o
+mesmo chamado nos dois modos. Para chamado ainda não fechado,
+`Data/Hora Fechamento` sai vazia e os tempos terminam na resolução, nunca na
+data atual.
+
+Exemplos:
+
+| SDM | Resolução | Fechamento | `FECHAMENTO` | `RESOLUCAO` |
+|---|---|---|---|---|
+| 1697694 | 04/05/2026 | 08/05/2026 | maio | maio |
+| 1704841 | 28/05/2026 | 03/06/2026 | junho | maio |
+| 1696948 | 29/04/2026 | 05/05/2026 | maio | abril |
+| 1736039 | 30/09/2026 | — (em homologação) | não entra | setembro |
+| 1651174 | 20/07/2026 (na Virtual) | 24/07/2026 (no COI) | não entra | julho |
+| 1644738 | 29/09/2025 (pelo COI, após sair da Virtual) | 29/09/2025 | não entra | não entra |
 
 **Nasceu na Virtual** quando o grupo de origem da primeira transferência de
 grupo é a Virtual; sem nenhuma transferência de grupo, vale o grupo atual. É o
@@ -130,7 +166,8 @@ coincide com a última entrada em `Em homologação` dentro da posse da Virtual,
 com no máximo 1 segundo de diferença de gravação.
 
 **Resolução x Fechamento.** São marcos diferentes: a resolução é a entrega da
-Virtual; o fechamento é o encerramento do chamado no SDM e define o período.
+Virtual; o fechamento é o encerramento do chamado no SDM. Qual dos dois define
+o período é escolhido em `@DataReferencia` (seção 2).
 
 Exemplo (SDM 1697694):
 
@@ -266,8 +303,8 @@ a partir do texto.
 | 5 | Regime | parâmetros | por Tipo + Prioridade; define o resultado |
 | 6 | Data/Hora Abertura | `open_date` | seção 4 |
 | 7 | Data/Hora Início Atendimento | `act_log` ST/RE dentro da posse | seção 4 |
-| 8 | Data/Hora Resolução | `resolve_date` / último RE | seção 4 |
-| 9 | Data/Hora Fechamento | `close_date` | seção 4; define o período |
+| 8 | Data/Hora Resolução | `resolve_date` / último RE | seção 4; define o período com `RESOLUCAO` |
+| 9 | Data/Hora Fechamento | `close_date` | seção 4; define o período com `FECHAMENTO` |
 | 10 | Tini (h) | janelas de posse até 7 | corrido, `[h]:mm:ss` |
 | 11 | Tsol (h) | janelas de posse até 8 | corrido, `[h]:mm:ss` |
 | 12 | Horas Comerciais Resposta (h) | parte comercial de 10 | calendário; 24x7 = 0 |
@@ -315,7 +352,11 @@ parte da consulta.
 - Identidade do grupo por UUID: `Fornecedores - Virtual`
   (`0x21679DF702A0EC478B1468D89E769836`). O nome do grupo é lido do cadastro,
   porque o `act_log` registra a transferência pelo nome.
-- Chamados em `Em homologação pelo fiscal` não têm `close_date` e não entram em
-  nenhum período enquanto não forem fechados.
+- Chamados em `Em homologação pelo fiscal` não têm `close_date` nem
+  `resolve_date` e não entram em nenhum dos dois modos.
+- No modo `RESOLUCAO`, a busca de chamados que passaram pela Virtual lê o
+  `act_log` de todos os chamados resolvidos no período; numa janela de 12 meses
+  a consulta leva cerca de 50 segundos, contra 1 a 2 segundos no modo
+  `FECHAMENTO`.
 - A consulta não lê arquivos externos: escopo, marcos e cálculo vêm do SDM, e
   parâmetros e calendário estão no próprio SQL.

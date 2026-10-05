@@ -29,10 +29,10 @@ O bloco é **idêntico byte a byte** nos três arquivos. SHA256 do bloco, com fi
 linha LF:
 
 ```text
-37eb665ccc4ffcd0a7cefdf48427bb42830ab42c7d9848fa3093361449e36c73
+3486b3440d54f753d48a5311729aba5ad1b2b02ece97a7a691ed5b1b80caaab9
 ```
 
-Ele recebe só `@DataInicio` e `@DataFim` (janela de fechamento) e entrega a
+Ele recebe só `@DataInicio`, `@DataFim` e `@DataReferencia` e entrega a
 tabela `#Virt_Saida`, com os dois regimes. Os arquivos diferem apenas em:
 
 | | Referência | Power BI |
@@ -59,20 +59,37 @@ No topo de cada arquivo:
 
 ```sql
 DECLARE @CoberturaMeses int = 12;
+DECLARE @DataReferencia nvarchar(20) = N'FECHAMENTO';
 ```
 
+`@DataReferencia` escolhe a data que define a janela, como na consulta de
+referência:
+
+| `@DataReferencia` | Data que define o período | Coluna usada |
+|---|---|---|
+| `N'FECHAMENTO'` (padrão) | fechamento | `Data/Hora Fechamento` (`call_req.close_date`) |
+| `N'RESOLUCAO'` | resolução | `Data/Hora Resolução` (`call_req.resolve_date`) |
+
+Com `FECHAMENTO`, entram chamados fechados no período e encerrados na Virtual.
+Com `RESOLUCAO`, entram chamados resolvidos no período dentro de uma janela de
+posse da Virtual, mesmo que ainda não tenham fechamento; nesse caso
+`Data/Hora Fechamento` sai vazia. Trocar só essa linha muda quais chamados
+entram; nenhum cálculo muda. Outro valor interrompe a atualização com erro.
+Regra completa em
+[virtual-calculation.md, seção 2](virtual-calculation.md#2-escopo-e-período).
+
 A janela vai do **dia 1 do mês (corrente − `@CoberturaMeses`)** até o fim do dia
-de hoje, pela **data de fechamento** do chamado (`Data/Hora Fechamento`), como na
-consulta de referência. Com `12`, ela traz os doze meses anteriores, inteiros, e
+de hoje, pela data escolhida. Com `12`, ela traz os doze meses anteriores, inteiros, e
 o mês corrente até hoje. Para outra cobertura, troque só esse número (em
 *Etapas aplicadas → Fonte*). Nenhuma regra depende dele.
 
-Exemplo: atualizado em 15/10/2026, com `12`, traz chamados fechados de
-01/10/2025 até 15/10/2026.
+Exemplo: atualizado em 15/10/2026, com `12` e `FECHAMENTO`, traz chamados
+fechados de 01/10/2025 até 15/10/2026.
 
-Volume e tempo de referência (janela de 01/10/2025 a 02/10/2026): 273 chamados
-(261 em `Chamados_TCU`, 12 em `Chamados_24x7`), entre 15 e 35 por mês fechado;
-1 a 2 segundos por consulta.
+Volume e tempo de referência (janela de 01/10/2025 a 05/10/2026): 275 chamados
+com `FECHAMENTO` (263 TCU, 12 24x7), em 1 a 2 segundos por consulta; 293 com
+`RESOLUCAO` (281 TCU, 12 24x7), em cerca de 50 segundos na consulta TCU, porque o
+modo lê o `act_log` de todos os chamados resolvidos na janela.
 
 ## 5. Saída
 
@@ -135,14 +152,15 @@ entrada no grupo (ver
 Os chamados vêm todos juntos. Para separar por serviço ou objeto atendido,
 use os campos do próprio chamado, como `Item de Configuração` e `Categoria`.
 Para o total de FAIA ou FARC de um mês, some `Indice FAIA` ou `Indice FARC`
-das duas consultas, filtrando o mês de `Data/Hora Fechamento`.
+das duas consultas, filtrando o mês da data escolhida em `@DataReferencia`.
 
 ## 6. Conferência
 
 Com o mesmo período, as duas consultas do Power BI têm as mesmas linhas e os
-mesmos valores dos dois resultados da referência. Conferido com fechamento em
-maio/2026 (19 chamados) e na janela de 01/10/2025 a 02/10/2026 (273 chamados):
-nenhuma diferença nas 37 colunas.
+mesmos valores dos dois resultados da referência com a mesma
+`@DataReferencia`. Conferido em maio/2026 (19 chamados com `FECHAMENTO`, 23 com
+`RESOLUCAO`) e na janela de 12 meses até 05/10/2026 (275 com `FECHAMENTO`, 293
+com `RESOLUCAO`): nenhuma diferença nas 37 colunas.
 
 Para conferir, troque no arquivo do Power BI as duas linhas que calculam
 `@DataInicio` e `@DataFim` por datas fixas iguais às da referência.
