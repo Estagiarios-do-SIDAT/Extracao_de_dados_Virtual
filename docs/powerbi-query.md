@@ -170,6 +170,10 @@ com `RESOLUCAO`): nenhuma diferença nas 38 colunas.
 Para conferir, troque no arquivo do Power BI as duas linhas que calculam
 `@DataInicio` e `@DataFim` por datas fixas iguais às da referência.
 
+A planilha `analysis/virtual-query-report-analysis.xlsx` pode ser usada para
+reconciliar os SDMs do resultado SQL com os relatórios da Virtual. Ela não
+interfere nos cálculos nem na população da consulta.
+
 ## 7. Cuidados
 
 - A consulta cria só tabelas temporárias (`#Virt_*`). Não grava nada no banco.

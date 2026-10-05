@@ -15,6 +15,8 @@ repositórios próprios.
 
 ```text
 .
+├── analysis/
+│   └── virtual-query-report-analysis.xlsx          conferência Consulta x Relatório
 ├── queries/
 │   └── consulta_virtual_faia_farc.sql              consulta de referência
 ├── powerbi/
@@ -117,9 +119,25 @@ Power BI.
    logs dos SDMs informados.
 3. Para o Power BI, rode as duas consultas com o mesmo período da referência.
    Elas devem ter as mesmas linhas e os mesmos valores dos dois resultados.
+4. Para reconciliar com o relatório da Virtual, use
+   `analysis/virtual-query-report-analysis.xlsx` (seção *Análise e
+   conferência*).
 
 O total de FAIA ou FARC de um período é a soma de `Indice FAIA` ou
 `Indice FARC` dos dois resultados (ver `docs/virtual-calculation.md`, seção 9).
+
+## Análise e conferência
+
+A pasta `analysis/` guarda artefatos de validação: comparação dos resultados
+das consultas com relatórios externos e reconciliação manual. Não contém SQL e
+nada nela é lido pelas consultas.
+
+| Arquivo | Uso |
+|---|---|
+| `analysis/virtual-query-report-analysis.xlsx` | compara, por período (uma aba por período), os SDMs do relatório da Virtual com os SDMs retornados pela consulta, nos dois sentidos: `Relatório` → `Retorna na consulta?` e `Consulta` → `Tem no relatório?`. A coluna `x` é só um separador |
+
+A planilha é apoio de validação humana. Não é entrada do motor nem fonte
+funcional: a população e os cálculos vêm só do SDM.
 
 ## Consultas de apoio
 

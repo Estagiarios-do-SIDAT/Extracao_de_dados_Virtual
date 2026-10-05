@@ -207,6 +207,7 @@ idêntico (maio: 23; 12 meses: 290).
 | `powerbi/consulta_virtual_chamados_24x7_power_bi.sql` | Power BI, regime 24x7 |
 | `docs/virtual-calculation.md` | regra vigente |
 | `docs/powerbi-query.md` | uso das consultas do Power BI |
+| `analysis/virtual-query-report-analysis.xlsx` | conferência Consulta x Relatório (apoio de validação; não é lida pelo motor) |
 
 Motor compartilhado: bloco entre `-- >>> MOTOR VIRTUAL` e `-- <<< MOTOR VIRTUAL`,
 idêntico nos três arquivos. O SHA256 do bloco (fim de linha LF) vigente é o da
@@ -418,3 +419,15 @@ SHA256 do motor (bloco com fim de linha LF):
   Power BI x referência sem diferença nas 38 colunas.
 - SHA256 do motor (bloco com fim de linha LF):
   `4b51f86c3d6c9f95be1f131c27fbaa5b767404d6e18b10a8cdc411a6cc4e5dda`.
+
+### 2026-10-05 — pasta `analysis/`
+
+- Incorporada a planilha de conferência `analysis/virtual-query-report-analysis.xlsx`
+  (nome original: `Análise de chamados - Virtual TI.xlsx`, conteúdo preservado
+  byte a byte). Uma aba por período (`01-05-2026 a 31-05-2026`,
+  `01-07-2026 a 30-07-2026`), com a comparação bidirecional
+  `Relatório | Retorna na consulta? | x | Consulta | Tem no relatório?`, feita
+  por fórmulas `COUNTIF`.
+- É evidência e apoio de validação humana. Não é dependência do motor SQL e não
+  altera a fonte de verdade (SDM/MDB); `queries/` e `powerbi/` não leem nada de
+  `analysis/`.
