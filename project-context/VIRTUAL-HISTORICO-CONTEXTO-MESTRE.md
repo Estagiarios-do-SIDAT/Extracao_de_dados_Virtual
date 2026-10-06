@@ -65,7 +65,7 @@ O nome do arquivo não marca o fim real do período: a planilha
 | Posse | relógio começa na 1ª entrada na Virtual (abertura, se nasceu nela); saídas pausam, reentradas reativam, janelas somadas | janelas de posse da Decision ([8.1]); decisão de 2026-10-02 |
 | Fechamento | `Data/Hora Fechamento` = `close_date` (= evento CL, ±1 s) | 265 chamados do escopo com CL: 258 no mesmo segundo, 7 com 1 s de diferença de gravação |
 | Formato | 10 durações em texto `[h]:mm:ss`; cálculo em segundos; fatores e índices numéricos | igual às planilhas |
-| Saída | uma consulta de referência com dois result sets de 38 colunas (blocos A, B, C e a coluna final `Grupo`), um por regime; Power BI em dois arquivos, um por regime, com as mesmas 38 colunas | motor único, bloco idêntico nos três arquivos |
+| Saída | uma consulta de referência com dois result sets de 39 colunas (blocos A, B, C, `Grupo` e `Indicador de Agendamento`), um por regime; Power BI em dois arquivos, um por regime, com as mesmas 39 colunas | motor único, bloco idêntico nos três arquivos |
 
 ## 4. Identidades no SDM
 
@@ -575,3 +575,48 @@ desta rodada, sem commit.
 
 SHA256 do motor (bloco com fim de linha LF):
 `265dcbd07712839dff5b426f2a6e05bc3c8acfef55e91ac936cc8625b5c09519`.
+
+### 2026-10-06 — Tempo suspenso, Indicador de Agendamento e Indicador Reabertura
+
+Auditoria antes da mudança (estado `0006366`):
+
+- `Tempo suspenso` já existia (coluna 31): posse até a Resolução − `Tsol`.
+  Mantido sem alteração; identidade `posse = Tsol + Tempo suspenso` com 0
+  divergências em 293 chamados (12 meses).
+- `Indicador Reabertura` já existia (coluna 33), byte a byte igual à Decision
+  ([6] `#Reabertura_DEC` e coluna `[Indicador Reabertura]`): `Sim` se algum
+  `act_log` do chamado, em todo o histórico, tem tipo contendo `reab` ou
+  descrição/ação contendo `reabert`. Mantido: nome (compatível com o Power BI e
+  com a Decision), valores e regra. Na população de 12 meses, só 1660920 é
+  `Sim`, e é o único com evento `RO` (reabertura real).
+- Não havia indicador de agendamento na Virtual nem na Decision.
+
+Limitação conhecida da regra de reabertura (comum à Decision, sem efeito na
+população atual): no SDM inteiro desde 2025, 421 chamados têm `RO` e casam com o
+texto, 39 têm `RO` e não casam (reabertura direta `Resolvido, concluído` →
+`Em andamento`, e `RO` de instanciação de template `Template definido` →
+`Aguarda atendimento`), e 239 casam com o texto sem `RO` (reabertura gravada como
+`ST` `Em homologação pelo fiscal` → `Reaberto`, mas também comentários com a
+palavra "reaberto"). Uma regra pelo evento real (destino `Reaberto` ou `RO`
+saindo de status resolvido) seria mais precisa, mas mudaria o conceito em relação
+à Decision; ficou para decisão.
+
+Nova coluna 39, `Indicador de Agendamento` (`Sim`/`Não`): transição com destino
+`Agendado` (código `AGENDADO`), em qualquer registro de status do `act_log`,
+dentro da posse da Virtual, com o mesmo critério de posse do Início. Em 12
+meses: 19 `Sim`, 274 `Não`; conferido com modelo independente (19/19). Fora do
+indicador por critério: 1731978 (o COI agendou no mesmo segundo da
+transferência) e 1731379/1732031 (chegaram já agendados pelo COI e a Virtual não
+agendou de novo); o tempo deles em `Agendado` na posse continua em `Tempo
+suspenso`.
+
+Validação contra `0006366`, rodando as duas versões no mesmo dia:
+
+- população idêntica em maio, 30/09–06/10 e 12 meses, nos dois modos e nos dois
+  regimes;
+- 0 diferenças nas 38 colunas anteriores;
+- os dois modos dão os mesmos valores;
+- Power BI x referência sem diferença nas 39 colunas.
+
+SHA256 do motor (bloco com fim de linha LF):
+`2dcbcbbe785ec1f45c47eae9fc4dfec022ff6fe52430d9983a9b3132e32edf9a`.

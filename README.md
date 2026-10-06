@@ -34,7 +34,7 @@ repositórios próprios.
 ## Consulta de referência
 
 [`queries/consulta_virtual_faia_farc.sql`](queries/consulta_virtual_faia_farc.sql)
-devolve dois resultados, com as mesmas 38 colunas:
+devolve dois resultados, com as mesmas 39 colunas:
 
 | Resultado | Conteúdo |
 |---|---|
@@ -84,11 +84,17 @@ Em resumo:
 - **Colunas:** identificação e datas (com `Data/Hora Fechamento`), as 15
   colunas de apuração da Virtual e colunas de contexto no padrão da Decision,
   entre elas `Item de Configuração` e `Categoria`, que identificam o serviço ou
-  o objeto atendido. A última coluna, `Grupo`, é o grupo atual do chamado no
-  SDM (`call_req.group_id`); é informativa e não é a posse histórica da Virtual.
+  o objeto atendido. `Grupo` (coluna 38) é o grupo atual do chamado no SDM
+  (`call_req.group_id`); é informativa e não é a posse histórica da Virtual.
   `Tempo suspenso` é o tempo de posse até a resolução em status que pausam;
   `Tsol` + `Tempo suspenso` = posse total até a resolução. As durações saem como
   `[h]:mm:ss`; fatores e índices são numéricos e calculados em segundos.
+- **Indicadores (`Sim`/`Não`):** `Indicador Reabertura` diz se o chamado foi
+  reaberto em algum momento (mesma regra da Decision). `Indicador de
+  Agendamento` (última coluna, 39) diz se o chamado passou para `Agendado`
+  durante a posse da Virtual. Os dois são informativos: não mudam tempos,
+  excessos nem índices. Reabertura não é tempo ativo: o status `Reaberto` pausa
+  o `Tsol`.
 - **Horário comercial (TCU):** 08:00–20:00, segunda a sexta, fora do
   calendário TCU.
 
@@ -101,8 +107,8 @@ temporárias.
 
 | Arquivo | Saída |
 |---|---|
-| [`powerbi/consulta_virtual_chamados_tcu_power_bi.sql`](powerbi/consulta_virtual_chamados_tcu_power_bi.sql) | `Chamados_TCU`, com as mesmas 38 colunas da referência |
-| [`powerbi/consulta_virtual_chamados_24x7_power_bi.sql`](powerbi/consulta_virtual_chamados_24x7_power_bi.sql) | `Chamados_24x7`, com as mesmas 38 colunas da referência |
+| [`powerbi/consulta_virtual_chamados_tcu_power_bi.sql`](powerbi/consulta_virtual_chamados_tcu_power_bi.sql) | `Chamados_TCU`, com as mesmas 39 colunas da referência |
+| [`powerbi/consulta_virtual_chamados_24x7_power_bi.sql`](powerbi/consulta_virtual_chamados_24x7_power_bi.sql) | `Chamados_24x7`, com as mesmas 39 colunas da referência |
 
 O período é automático: os últimos `@CoberturaMeses` meses (padrão **12**) mais
 o mês corrente, pela data escolhida em `@DataReferencia` (padrão `FECHAMENTO`),

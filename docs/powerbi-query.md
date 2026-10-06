@@ -29,7 +29,7 @@ O bloco é **idêntico byte a byte** nos três arquivos. SHA256 do bloco, com fi
 linha LF:
 
 ```text
-265dcbd07712839dff5b426f2a6e05bc3c8acfef55e91ac936cc8625b5c09519
+2dcbcbbe785ec1f45c47eae9fc4dfec022ff6fe52430d9983a9b3132e32edf9a
 ```
 
 Ele recebe só `@DataInicio`, `@DataFim` e `@DataReferencia` e entrega a
@@ -40,7 +40,7 @@ tabela `#Virt_Saida`, com os dois regimes. Os arquivos diferem apenas em:
 | Período | `@DataInicio` / `@DataFim` digitados | calculado a partir de hoje (seção 4) |
 | Saída | dois resultados (TCU e 24x7) | um arquivo por regime |
 
-As três consultas têm as mesmas 38 colunas, na mesma ordem.
+As três consultas têm as mesmas 39 colunas, na mesma ordem.
 
 Qualquer mudança de regra é feita no bloco da referência e copiada para os dois
 arquivos do Power BI. Depois da cópia, os três blocos devem continuar idênticos.
@@ -93,7 +93,7 @@ modo lê o `act_log` de todos os chamados resolvidos na janela.
 
 ## 5. Saída
 
-As mesmas 38 colunas da referência, na mesma ordem:
+As mesmas 39 colunas da referência, na mesma ordem:
 
 | # | Coluna | Unidade |
 |---|---|---|
@@ -129,12 +129,13 @@ As mesmas 38 colunas da referência, na mesma ordem:
 | 30 | Data Entrada Grupo Virtual | data e hora (Brasil) |
 | 31 | Tempo suspenso | texto `[h]:mm:ss` (posse em status que pausam) |
 | 32 | Meta Primeiro Atendimento | `Atende` / `Não Atende` / `N/A` |
-| 33 | Indicador Reabertura | `Sim` / `Não` |
+| 33 | Indicador Reabertura | `Sim` / `Não`: o chamado foi reaberto (não é tempo ativo) |
 | 34 | Acordo Prazo | `-` |
 | 35 | Acordo Qualidade | `-` |
 | 36 | Justificativa | `-` |
 | 37 | Meta Atendimento | `Atende` / `Não Atende` / `N/A` |
 | 38 | Grupo | texto: grupo atual do chamado no SDM (vazio sem grupo) |
+| 39 | Indicador de Agendamento | `Sim` / `Não`: passou para `Agendado` durante a posse da Virtual |
 
 Uma linha por chamado. Os blocos e a origem de cada coluna estão em
 [virtual-calculation.md, seção 8](virtual-calculation.md#8-mapa-das-colunas).
@@ -168,7 +169,9 @@ Com o mesmo período, as duas consultas do Power BI têm as mesmas linhas e os
 mesmos valores dos dois resultados da referência com a mesma
 `@DataReferencia`. Conferido em maio/2026 (19 chamados com `FECHAMENTO`, 23 com
 `RESOLUCAO`) e na janela de 12 meses até 05/10/2026 (275 com `FECHAMENTO`, 293
-com `RESOLUCAO`): nenhuma diferença nas 38 colunas.
+com `RESOLUCAO`): nenhuma diferença nas 39 colunas. A janela do Power BI vai até
+amanhã; um chamado fechado hoje aparece nele e não numa referência que termine
+hoje à 00:00.
 
 Para conferir, troque no arquivo do Power BI as duas linhas que calculam
 `@DataInicio` e `@DataFim` por datas fixas iguais às da referência.

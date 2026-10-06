@@ -28,7 +28,7 @@ consulta. Não há dependência de arquivo externo.
 
 ## 1. Saída
 
-Uma execução devolve **dois resultados**, com as mesmas 38 colunas:
+Uma execução devolve **dois resultados**, com as mesmas 39 colunas:
 
 | Resultado | Conteúdo |
 |---|---|
@@ -53,7 +53,7 @@ Uma linha por chamado. As colunas vêm em três blocos (lista completa na seçã
 | A — identificação e datas | 1 a 9: do `ID Chamado` até `Data/Hora Fechamento` |
 | B — apuração da Virtual | 10 a 24: `Tini (h)` até `Indice FAIA` |
 | C — contexto no padrão da Decision | 25 a 37: `Status` até `Meta Atendimento` |
-| D — grupo atual | 38: `Grupo` |
+| D — grupo atual e agendamento | 38: `Grupo`; 39: `Indicador de Agendamento` |
 
 Os chamados vêm todos juntos, separados só pelo regime. Para distinguir o
 serviço ou o objeto atendido, use os dados do próprio chamado:
@@ -359,7 +359,8 @@ a partir do texto.
 - **Índice** é expresso em **pontos percentuais**: horas de excesso × fator,
   com o excesso em segundos convertido para horas (6 casas). Exemplo: 8,065 h
   de excesso × 0,4 = 3,226.
-- Sem Início, as colunas de resposta ficam vazias.
+- Com o fallback da captura (seção 4), todo chamado que entrou na Virtual tem
+  Início.
 
 Correspondência com as colunas da Decision:
 
@@ -388,6 +389,29 @@ Diferenças em relação à Decision:
 | Fim do Tempo de Atendimento | 1º `SOLN`, senão `resolve_date` | Resolução (`resolve_date`), com o `SOLN` como pausa | na Virtual a entrega é a ida para `Em homologação` (`resolve_date`); o `SOLN` é raro e pode ser seguido de reabertura |
 | Estado no início | heurística pela origem do 1º `ST` | origem do 1º evento e, depois, o destino de cada evento | regra do motor de posse da Decision; a heurística trata `Aguarda fornecedor` como ativo |
 | `Tempo suspenso` | status fora dos 4 ativos do `Tempo Total Decision`, mais `SOLN` → pesquisa | posse até a Resolução − `Tsol` | a Virtual não tem `Tempo Total Decision`; o tempo pausado do `Tsol` aparece inteiro em `Tempo suspenso` |
+
+### 7.4 Indicadores
+
+| Coluna | Pergunta | Fonte | Depende da posse? | Valores |
+|---|---|---|---|---|
+| `Tempo suspenso` | quanto tempo da posse, até a Resolução, ficou em status que pausam? | linha do tempo de status (7.2) ∩ janelas de posse (7.1) | sim: tempo fora da Virtual nunca entra | `[h]:mm:ss` |
+| `Indicador Reabertura` | o chamado foi reaberto? | `act_log` com tipo contendo `reab` ou descrição/ação contendo `reabert`, em todo o histórico do chamado (regra [6] da Decision) | não | `Sim` / `Não` |
+| `Indicador de Agendamento` | o chamado passou para `Agendado` enquanto estava com a Virtual? | registro de status do `act_log` com **destino** `Agendado` (código `AGENDADO`), dentro de uma janela de posse | sim | `Sim` / `Não` |
+
+- **Reabertura não é tempo ativo.** `Indicador Reabertura = Sim` só diz que
+  houve reabertura. O status `Reaberto` pausa o `Tsol` como qualquer status não
+  ativo; o atendimento volta a contar quando o chamado volta a `Em andamento`
+  ou `Aberto, aguarda atendimento`. Exemplo: 1660920, reaberto por `RO` em
+  02/12/2025 19:17:32 (`Resolvido, concluído` → `Reaberto`).
+- **Agendamento pelo destino.** Só conta a transição *para* `Agendado`
+  (`Em andamento` → `Agendado`). `Agendado` → `Em andamento` não prova entrada em
+  `Agendado`. O evento precisa estar dentro da posse com o mesmo critério do
+  Início: entrada antes do evento e nenhuma saída entre a entrada e o evento,
+  inclusive no mesmo segundo. Um `Agendado` gravado pelo COI no segundo da
+  transferência para a Virtual, ou antes dela, não conta; o chamado que chega
+  à Virtual já `Agendado` só tem `Sim` se a Virtual o agendar de novo. O tempo
+  em `Agendado` na posse vai para `Tempo suspenso` em qualquer caso.
+- Os indicadores não mudam tempos, excessos nem índices.
 
 ## 8. Mapa das colunas
 
@@ -425,12 +449,13 @@ Diferenças em relação à Decision:
 | 30 | Data Entrada Grupo Virtual | primeira entrada na Virtual | seção 4 |
 | 31 | Tempo suspenso | janelas de posse até 8 − 11 | corrido, `[h]:mm:ss`; posse em status que pausam (seção 7.2) |
 | 32 | Meta Primeiro Atendimento | 18 | `Atende` / `Não Atende` / `N/A` |
-| 33 | Indicador Reabertura | `act_log`: tipo com `reab` ou texto com `reabert` | `Sim` / `Não` |
+| 33 | Indicador Reabertura | `act_log`: tipo com `reab` ou texto com `reabert`, todo o histórico | `Sim` / `Não`; não depende da posse (seção 7.4) |
 | 34 | Acordo Prazo | — | `-` (campo reservado, como na Decision) |
 | 35 | Acordo Qualidade | — | `-` |
 | 36 | Justificativa | — | `-` |
 | 37 | Meta Atendimento | 19 | `Atende` / `Não Atende` / `N/A` |
 | 38 | Grupo | `call_req.group_id` → `ca_contact.last_name` | grupo atual do chamado no SDM; vazio sem grupo (seção 4) |
+| 39 | Indicador de Agendamento | `act_log`: transição com destino `Agendado` dentro da posse | `Sim` / `Não` (seção 7.4) |
 
 ## 9. Totais
 

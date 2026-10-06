@@ -881,7 +881,34 @@ SELECT
          ELSE N'Atende' END AS [Meta Atendimento],
     -- Grupo atual do chamado no SDM (call_req.group_id), pelo nome do cadastro.
     -- Informativo: nao e a posse historica nem participa do escopo.
-    LTRIM(RTRIM(grp.last_name)) AS [Grupo]
+    LTRIM(RTRIM(grp.last_name)) AS [Grupo],
+    -- Indicador de Agendamento: houve ao menos uma transicao com DESTINO
+    -- 'Agendado' (em qualquer registro de status do act_log) dentro da posse da
+    -- Virtual, com o mesmo criterio de posse do Inicio. Informativo: nao muda
+    -- tempo, excesso nem indice.
+    CASE WHEN EXISTS (
+            SELECT 1
+            FROM #Virt_Log AS l
+            JOIN dbo.cr_stat AS sd
+                ON sd.sym = l.status_para COLLATE DATABASE_DEFAULT
+            WHERE l.id = m.id
+              AND sd.code = 'AGENDADO' -- Agendado
+              AND EXISTS (
+                    SELECT 1
+                    FROM #Virt_Movimento AS e
+                    WHERE e.id = l.id
+                      AND e.movimento = 'E'
+                      AND e.momento < l.system_time
+                      AND NOT EXISTS (
+                            SELECT 1
+                            FROM #Virt_Movimento AS s
+                            WHERE s.id = l.id
+                              AND s.movimento = 'S'
+                              AND s.momento >= e.momento
+                              AND s.momento <= l.system_time
+                      )
+              )
+         ) THEN N'Sim' ELSE N'Não' END AS [Indicador de Agendamento]
 INTO #Virt_Saida
 FROM #Virt_Marco AS m
 JOIN #Virt_Calculo AS c
@@ -959,7 +986,8 @@ SELECT
     [Acordo Qualidade],
     [Justificativa],
     [Meta Atendimento],
-    [Grupo]
+    [Grupo],
+    [Indicador de Agendamento]
 FROM #Virt_Saida
 WHERE Aba = N'Chamados_TCU'
 ORDER BY [Data/Hora Fechamento], [ID Chamado];
@@ -1005,7 +1033,8 @@ SELECT
     [Acordo Qualidade],
     [Justificativa],
     [Meta Atendimento],
-    [Grupo]
+    [Grupo],
+    [Indicador de Agendamento]
 FROM #Virt_Saida
 WHERE Aba = N'Chamados_24x7'
 ORDER BY [Data/Hora Fechamento], [ID Chamado];
