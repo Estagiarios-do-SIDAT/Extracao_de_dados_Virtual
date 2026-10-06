@@ -77,9 +77,9 @@ Em resumo:
   tempo de posse até o primeiro `Em andamento` dentro da posse (sem ele, a
   primeira atividade registrada na posse; sem atividade, a entrada). `Tsol (h)`
   é o Tempo de Atendimento: tempo de posse até a resolução, contando só os
-  status ativos `Em andamento`, `Aberto, aguarda atendimento` e `Reaberto`; os
-  demais (`Aguarda atendimento`, `Agendado`, solução registrada...) pausam e vão
-  para `Tempo suspenso`.
+  status ativos `Em andamento`, `Aberto, aguarda atendimento` e `Reaberto`
+  (lista explícita, e não `cr_stat.hold`); os demais (`Aguarda atendimento`,
+  `Agendado`, solução registrada...) pausam e vão para `Tempo suspenso`.
   `Excesso Resposta (h)` e `Excesso Resolução (h)` correspondem ao Primeiro
   Atendimento Excedido e ao Tempo Atendimento Excedido da Decision.
 - **Colunas:** identificação e datas (com `Data/Hora Fechamento`), as 15

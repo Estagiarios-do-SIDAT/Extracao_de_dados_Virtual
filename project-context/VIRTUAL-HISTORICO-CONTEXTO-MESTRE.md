@@ -804,3 +804,39 @@ trazem a transição nos dois campos; Power BI e referência sem diferença.
 
 SHA256 do motor (bloco com fim de linha LF):
 `b53862ecf92e6f5703ed953ead8506dadad9a78f01296b3e1db41f4341bd228d`.
+
+### 2026-10-06 — avaliação dos status `hold = 0`
+
+Critério (decisão do usuário): um status com `cr_stat.hold = 0` que hoje não
+conta só entra na lista de ativos se, em todos os projetos onde ocorrer:
+
+1. aumentar o tempo agregado em até 2%;
+2. aumentar o FARC agregado em até 1%;
+3. não levar nenhum chamado de Atende para Não Atende;
+4. não acrescentar mais de 4 h a nenhum chamado;
+5. não mudar a população;
+6. não for terminal, administrativo, de problema/mudança nem de outra entidade;
+7. representar uma condição operacional do chamado.
+
+A lista continua explícita, e não o `hold` dinâmico.
+
+| Status (`hold = 0`) | Resultado | Motivo |
+|---|---|---|
+| `Em andamento`, `Aberto, aguarda atendimento`, `Reaberto` | já contam | — |
+| `Aguarda atendimento` (`REOP`) | **reprovado** | ver abaixo |
+| `Homologada pelo cliente`, `Encerrado`, `Resolvido, avisar cliente`, `Não resolvido, avisar cliente`, `Resolvido pelo VA` e demais terminais/administrativos | reprovado (critério 6) | não são atendimento; nascem depois da resolução |
+| status de problema/mudança e de RDM (`REL_TICKET`) | reprovado (critério 6) | outra entidade |
+| `Em Progresso`, `Pesquisando`, `Confirmada`, `Aberto pelo VA` | sem evidência para aprovar | não ocorrem nas populações |
+
+`Aguarda atendimento`, contra a versão publicada `4b34195`:
+
+| Projeto | Tempo | FARC | Atende → Não Atende | Maior delta |
+|---|---|---|---|---|
+| Virtual | +1,76% (`FECHAMENTO`) / +2,00% (`RESOLUCAO`) | +0,22% | 0 | **+115:17 (1647183)** |
+| Decision | +1,14% | **+11,98%** | **1** | **+56:04** |
+| A2B | **+17,05%** | **+238,5%** | **12** | **+40:39** |
+
+Na Virtual, 206 h das 468 h em `Aguarda atendimento` são fila antes do primeiro
+atendimento (289 chamados), já cobrada no `Tini`/FAIA. Nenhum outro status
+`hold = 0` do chamado ocorre nas populações. Lista de ativos mantida: `FIP`,
+`OP`, `REAB`.

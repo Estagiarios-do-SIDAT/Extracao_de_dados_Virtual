@@ -331,6 +331,17 @@ Dentro da posse, o Tempo de Atendimento (`Tsol`) conta só os status
 | `Reaberto` | `REAB` | conta: reabrir corrige um encerramento indevido, e o tempo é de atendimento |
 | `Aguarda atendimento`, `Agendado`, `Aguarda fornecedor`, `Em homologação`, `Resolvido, concluído` e os demais | — | pausa; vai para `Tempo suspenso` |
 
+A lista de status ativos é **explícita** (códigos `FIP`, `OP`, `REAB`), e não
+o campo `cr_stat.hold`. Um status com `hold = 0` só entra na lista depois de
+avaliado: o cadastro também marca com `hold = 0` status terminais (`Encerrado`,
+`Resolvido, avisar cliente`...), administrativos e de problema/mudança, que
+não são atendimento.
+
+`Aguarda atendimento` (`REOP`) tem `hold = 0` e **não conta**. Foi avaliado e
+reprovado pelo impacto: em 12 meses somaria 467 h ao `Tsol` (292 chamados),
+com até +115 h num único chamado; 206 h dessas são a fila antes do primeiro
+atendimento, que já entra no `Tini`/FAIA.
+
 A linha do tempo de status vem dos registros de status do próprio chamado no
 `act_log`: `ST` (mudança manual), `RE` (ida para `Em homologação`), `RO`
 (reabertura), `CL` (encerramento) e `CLREQ`, com o texto
