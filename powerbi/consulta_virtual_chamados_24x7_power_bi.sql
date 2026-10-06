@@ -518,6 +518,60 @@ WHERE (@DataReferencia = N'FECHAMENTO' AND c.encerrou_virtual = 1)
 CREATE UNIQUE CLUSTERED INDEX IX_Virt_Chamado ON #Virt_Chamado (id);
 
 --------------------------------------------------------------------------------
+-- [6.3] Data de Encerramento Virtual: ultimo encerramento da atuacao da Virtual,
+--       como a Data de Encerramento Decision. Encerramento = evento de status
+--       (ST, RE, RO, CL...) com DESTINO 'Em homologacao' (codigo EMHOM) ou SOLN,
+--       que a Decision trata como entrada implicita em homologacao. Vale so a
+--       ENTRADA: o evento anterior na linha do tempo nao pode ser outro
+--       encerramento ('Em homologacao' -> 'Reaberto' nao conta; SOLN depois da
+--       homologacao nao e novo encerramento). Posse: mesmo criterio do Inicio.
+--       Com reabertura e novo encerramento, vale o ultimo. Sem evento valido,
+--       fica NULL (sem substituto por resolve_date, close_date ou atividade).
+--------------------------------------------------------------------------------
+IF OBJECT_ID('tempdb..#Virt_Encerramento') IS NOT NULL DROP TABLE #Virt_Encerramento;
+SELECT
+    x.id,
+    MAX(x.system_time) AS encerramento_epoch
+INTO #Virt_Encerramento
+FROM (
+    SELECT
+        l.id,
+        l.system_time,
+        z.encerra,
+        LAG(z.encerra, 1, 0) OVER (PARTITION BY l.id ORDER BY l.system_time, l.log_id) AS anterior_encerra
+    FROM #Virt_Log AS l
+    JOIN #Virt_Chamado AS c
+        ON c.id = l.id
+    LEFT JOIN dbo.cr_stat AS sd
+        ON sd.sym = l.status_para COLLATE DATABASE_DEFAULT
+    CROSS APPLY (
+        SELECT encerra = CASE WHEN sd.code = 'EMHOM' -- Em homologacao
+                                OR l.[type] = 'SOLN' THEN 1 ELSE 0 END
+    ) AS z
+    WHERE l.status_para IS NOT NULL
+       OR l.[type] = 'SOLN'
+) AS x
+WHERE x.encerra = 1
+  AND x.anterior_encerra = 0
+  AND EXISTS (
+        SELECT 1
+        FROM #Virt_Movimento AS e
+        WHERE e.id = x.id
+          AND e.movimento = 'E'
+          AND e.momento < x.system_time
+          AND NOT EXISTS (
+                SELECT 1
+                FROM #Virt_Movimento AS s
+                WHERE s.id = x.id
+                  AND s.movimento = 'S'
+                  AND s.momento >= e.momento
+                  AND s.momento <= x.system_time
+          )
+  )
+GROUP BY x.id;
+CREATE UNIQUE CLUSTERED INDEX IX_Virt_Encerramento ON #Virt_Encerramento (id);
+
+--------------------------------------------------------------------------------
 -- [7] Marcos em horario do Brasil, regime e parametros.
 --------------------------------------------------------------------------------
 IF OBJECT_ID('tempdb..#Virt_Marco') IS NOT NULL DROP TABLE #Virt_Marco;
@@ -540,6 +594,7 @@ SELECT
     DATEADD(HOUR, -@HorasBrasilParaUTC, DATEADD(SECOND, c.inicio_epoch,     @Epoch)) AS inicio,
     DATEADD(HOUR, -@HorasBrasilParaUTC, DATEADD(SECOND, c.resolucao_epoch,  @Epoch)) AS resolucao,
     DATEADD(HOUR, -@HorasBrasilParaUTC, DATEADD(SECOND, c.fechamento_epoch, @Epoch)) AS fechamento,
+    DATEADD(HOUR, -@HorasBrasilParaUTC, DATEADD(SECOND, enc.encerramento_epoch, @Epoch)) AS encerramento_virtual,
     pr.MetaRespostaH,
     pr.MetaResolucaoH,
     pr.FatorFAIA,
@@ -548,7 +603,9 @@ INTO #Virt_Marco
 FROM #Virt_Chamado AS c
 LEFT JOIN #Virt_Parametros AS pr
     ON pr.Tipo = c.tipo
-   AND pr.Prioridade = c.prioridade;
+   AND pr.Prioridade = c.prioridade
+LEFT JOIN #Virt_Encerramento AS enc
+    ON enc.id = c.id;
 CREATE UNIQUE CLUSTERED INDEX IX_Virt_Marco ON #Virt_Marco (id);
 
 --------------------------------------------------------------------------------
@@ -883,7 +940,10 @@ SELECT
                               AND s.momento <= l.system_time
                       )
               )
-         ) THEN N'Sim' ELSE N'Não' END AS [Indicador de Agendamento]
+         ) THEN N'Sim' ELSE N'Não' END AS [Indicador de Agendamento],
+    -- Data de Encerramento Virtual: bloco [6.3]. Nao e o fechamento (close_date)
+    -- nem substitui a Resolucao.
+    m.encerramento_virtual AS [Data de Encerramento Virtual]
 INTO #Virt_Saida
 FROM #Virt_Marco AS m
 JOIN #Virt_Calculo AS c
@@ -962,7 +1022,8 @@ SELECT
     [Justificativa],
     [Meta Atendimento],
     [Grupo],
-    [Indicador de Agendamento]
+    [Indicador de Agendamento],
+    [Data de Encerramento Virtual]
 FROM #Virt_Saida
 WHERE Aba = N'Chamados_24x7'
 ORDER BY [Data/Hora Fechamento], [ID Chamado];

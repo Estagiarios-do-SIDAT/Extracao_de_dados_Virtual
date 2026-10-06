@@ -65,7 +65,7 @@ O nome do arquivo não marca o fim real do período: a planilha
 | Posse | relógio começa na 1ª entrada na Virtual (abertura, se nasceu nela); saídas pausam, reentradas reativam, janelas somadas | janelas de posse da Decision ([8.1]); decisão de 2026-10-02 |
 | Fechamento | `Data/Hora Fechamento` = `close_date` (= evento CL, ±1 s) | 265 chamados do escopo com CL: 258 no mesmo segundo, 7 com 1 s de diferença de gravação |
 | Formato | 10 durações em texto `[h]:mm:ss`; cálculo em segundos; fatores e índices numéricos | igual às planilhas |
-| Saída | uma consulta de referência com dois result sets de 39 colunas (blocos A, B, C, `Grupo` e `Indicador de Agendamento`), um por regime; Power BI em dois arquivos, um por regime, com as mesmas 39 colunas | motor único, bloco idêntico nos três arquivos |
+| Saída | uma consulta de referência com dois result sets de 40 colunas (blocos A, B, C, `Grupo`, `Indicador de Agendamento` e `Data de Encerramento Virtual`), um por regime; Power BI em dois arquivos, um por regime, com as mesmas 40 colunas | motor único, bloco idêntico nos três arquivos |
 
 ## 4. Identidades no SDM
 
@@ -620,3 +620,113 @@ Validação contra `0006366`, rodando as duas versões no mesmo dia:
 
 SHA256 do motor (bloco com fim de linha LF):
 `2dcbcbbe785ec1f45c47eae9fc4dfec022ff6fe52430d9983a9b3132e32edf9a`.
+
+### 2026-10-06 — Data de Encerramento Virtual e revisão do Tempo suspenso
+
+**Decision (lida no código, sem alteração).**
+
+- `[Data de Encerramento Decision]` vem de `#Encerramento_DEC` ([8.3]): última
+  ENTRADA em `Em homologação` (destino com `eh_homologacao_decision = 1`, evento
+  anterior não homologação) dentro de uma janela de posse
+  (`[inicio, fim)`, ou igual ao fim quando ele é o `close_date`). Os eventos vêm
+  de `#StatusEventos_DEC` ([8.2]: `ST`, `CL` textual, `NOVO`, `SOLN` como entrada
+  implícita em homologação, `LOG` na exceção de relatórios). Com reabertura, vale
+  a última. Fallback [8.3.1], só quando o primário é NULL: último `RE` com
+  destino `Em homologação` na posse.
+- `[Tempo suspenso]` vem de `#SuspTotal_DEC` ([8.8]): união dos intervalos de
+  posse em status fora dos 4 ativos de `#RegrasStatus_DEC` com o par
+  `SOLN` → `SRVY_SENT`. A linha do tempo vai da abertura ao `close_date`
+  ([8.0]); é corrido; a hora não comercial em status ativo fica no terceiro
+  componente (fora da apuração), não no suspenso.
+
+**Virtual.** Nova coluna 40, `Data de Encerramento Virtual` (bloco [6.3]): mesma
+regra de entrada e de "última", com os eventos de status já lidos pela linha do
+tempo (`ST`, `RE`, `RO`, `CL`) e o critério de posse do Início. Não se adotou o
+`SOLN` como entrada implícita: na Virtual o `SOLN` encerra o chamado
+(1660920: o `RO` seguinte parte de `Resolvido, concluído`), e a tarefa vetou
+substitutos sem evidência. Como o `RE` já é lido como evento de status, o
+fallback [8.3.1] da Decision não é necessário.
+
+Medição (12 meses, 293 chamados): 273 com Data de Encerramento Virtual igual à
+`Data/Hora Resolução`, 13 com 1 s de diferença (o `resolve_date` gravado 1 s
+antes do `RE`), 7 só com resolução (encerrados por `SOLN`, sem homologação:
+1644896, 1645103, 1646289, 1646977, 1647146, 1647203, 1648168), 0 só com
+homologação. Uma única reabertura com nova homologação (1650824, vale 17:13:55).
+Nenhuma entrada em homologação fora da posse em todo o histórico da Virtual (289
+entradas em 288 chamados abertos desde 2025). Os critérios de posse do Início,
+de janela fechada e da Decision dão o mesmo resultado nos 293.
+
+`Tempo suspenso` revisado e mantido: identidade `posse = Tsol + Tempo suspenso`
+com 0 divergências; nenhum valor mudou. As diferenças para a Decision
+(terminal na Resolução, e não no `close_date`; `Aguarda atendimento` e
+`Reaberto` como pausa) são intencionais e já estavam registradas.
+
+Validação contra `f57148d`, rodando as duas versões no mesmo dia:
+
+- população idêntica nos dois modos e nos dois regimes;
+- 0 diferenças nas 39 colunas anteriores;
+- nova coluna conferida com modelo independente (293/293);
+- Power BI x referência sem diferença nas 40 colunas.
+
+SHA256 do motor (bloco com fim de linha LF):
+`4613209919b58701f57654410a51deae60c84bc5be47b4899ac1de875bd59caa`.
+
+### 2026-10-06 — Data de Encerramento Virtual: SOLN como encerramento
+
+Revisão da regra da intervenção anterior, antes do commit. A primeira versão
+não aceitava `SOLN` e deixava NULL 7 chamados com `Data/Hora Resolução`.
+
+**Decision (código, sem alteração).**
+
+| Fonte | Como entra |
+|---|---|
+| `ST`, `CL` | em `#StatusEventos_DEC` ([8.2], `WHERE al.type IN ('ST', 'CL')`) |
+| `SOLN` | em `#MarcosSolucao_DEC` (L1997–2068); depois em `#StatusEventos_DEC` com destino `Em homologação`, `eh_homologacao_destino = 1` (L2070–2097), salvo se já houver homologação no mesmo segundo |
+| `RE` | só no fallback [8.3.1] (`#EncerramentoRE_DEC`, L2182+), quando `#Encerramento_DEC` é NULL |
+
+- **Escolha** ([8.3], `#Encerramento_DEC`, L2100–2176): entrada = destino de
+  homologação com `LAG(eh_homologacao_destino)` = 0, na posse (`[inicio, fim)`);
+  vence a última (`ROW_NUMBER` por `evento_epoch DESC`, desempate ST, NOVO, LOG,
+  SOLN). A saída é `COALESCE(primário, RE)` (L3101).
+- **Limite do modelo da Decision:** como o `RE` não é lido no primário, num
+  chamado `SOLN → reabertura → RE` o `SOLN` venceria.
+
+**Virtual.** O bloco [6.3] passa a aceitar, como encerramento, o evento de
+status com destino `Em homologação` **ou** o `SOLN`. Vale só a entrada (evento
+anterior que não seja encerramento) dentro da posse (critério do Início), e
+vence o último. O `RE` é lido como evento de status desde a abertura; por isso a
+homologação depois de uma reabertura vence o `SOLN` anterior. A exceção `LOG` da
+Decision (Produção de relatórios) não se aplica: nenhum chamado da Virtual tem
+essa categoria ou resumo.
+
+**Efeito (12 meses, 293 chamados).** Mudaram só os 7 encerrados por `SOLN` sem
+homologação, de NULL para a data do `SOLN`, de 4 a 170 s antes do
+`resolve_date`:
+
+| SDM | `SOLN` | `resolve_date` |
+|---|---|---|
+| 1644896 | 14:22:51 | 14:25:41 |
+| 1645103 | 14:26:11 | 14:26:16 |
+| 1646289 | 14:26:44 | 14:26:49 |
+| 1646977 | 14:28:05 | 14:28:09 |
+| 1647146 | 14:30:33 | 14:30:38 |
+| 1647203 | 15:59:07 | 15:59:23 |
+| 1648168 | 11:18:12 | 11:18:24 |
+
+Todos os 7 têm data de 06/10/2025, exceto 1648168, de 08/10/2025.
+
+- 1660920 continua em 16/12/2025 11:08:09 (`RE` após a reabertura), e não no
+  `SOLN` de 01/12.
+- 1681392 continua em 11:31:07 (o `SOLN` das 14:47:36 veio com o chamado já em
+  homologação).
+- Nenhum chamado fica NULL.
+
+Validação contra `f57148d`:
+
+- população idêntica;
+- 0 diferenças nas 39 colunas anteriores, incluindo o `Tempo suspenso`;
+- modelo independente = SQL (293/293);
+- Power BI x referência sem diferença.
+
+SHA256 do motor (bloco com fim de linha LF):
+`a2e051688d76dc401d351386685251fe9a17b1c27813b9c717e44c306c927f83`.

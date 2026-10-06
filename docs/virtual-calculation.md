@@ -28,7 +28,7 @@ consulta. Não há dependência de arquivo externo.
 
 ## 1. Saída
 
-Uma execução devolve **dois resultados**, com as mesmas 39 colunas:
+Uma execução devolve **dois resultados**, com as mesmas 40 colunas:
 
 | Resultado | Conteúdo |
 |---|---|
@@ -53,7 +53,7 @@ Uma linha por chamado. As colunas vêm em três blocos (lista completa na seçã
 | A — identificação e datas | 1 a 9: do `ID Chamado` até `Data/Hora Fechamento` |
 | B — apuração da Virtual | 10 a 24: `Tini (h)` até `Indice FAIA` |
 | C — contexto no padrão da Decision | 25 a 37: `Status` até `Meta Atendimento` |
-| D — grupo atual e agendamento | 38: `Grupo`; 39: `Indicador de Agendamento` |
+| D — grupo atual, agendamento e encerramento | 38: `Grupo`; 39: `Indicador de Agendamento`; 40: `Data de Encerramento Virtual` |
 
 Os chamados vêm todos juntos, separados só pelo regime. Para distinguir o
 serviço ou o objeto atendido, use os dados do próprio chamado:
@@ -152,6 +152,7 @@ Todos em horário do Brasil (UTC−3), a partir dos campos em epoch do SDM.
 | `Data/Hora Início Atendimento` | primeira passagem para **`Em andamento`** (evento `ST`/`RE`) feita **enquanto o chamado está no grupo Virtual**: a captura da Decision. Sem ela, a primeira atividade registrada na posse; sem atividade, a entrada na Virtual |
 | `Data/Hora Resolução` | `call_req.resolve_date`, gravado quando o chamado vai para `Em homologação` (evento `RE`) |
 | `Data/Hora Fechamento` | `call_req.close_date`, gravado no encerramento do chamado (evento `CL`, em geral pela automação, dias depois da resolução) |
+| `Data de Encerramento Virtual` | último **encerramento** da Virtual durante a posse: entrada em `Em homologação` ou `SOLN` (ver abaixo); vazia se não houver |
 
 **Início do atendimento.** Ao transferir para a Virtual, o COI devolve o
 chamado para `Aguarda atendimento`. O início é a primeira vez que a Virtual põe
@@ -182,6 +183,45 @@ chamado fechado, o grupo final; para chamado ainda aberto, o grupo atual. É
 informativa e diferente das janelas históricas de posse: não define escopo,
 período, responsabilidade nem tempos. Um chamado resolvido na Virtual e depois
 devolvido ao COI aparece no modo `RESOLUCAO` com `Grupo = COI` (ex.: 1651174).
+
+**Data de Encerramento Virtual.** É o equivalente da Data de Encerramento
+Decision: o momento em que a Virtual encerrou sua atuação no chamado.
+
+- Encerra a atuação:
+  - um evento de status do `act_log` (`ST`, `RE`, `RO`, `CL`...) com
+    **destino** `Em homologação` (código `EMHOM`);
+  - um `SOLN` (solução registrada), que a Decision trata como entrada
+    implícita em homologação.
+- Vale só a **entrada**: o evento anterior na linha do tempo não pode ser
+  outro encerramento. `Em homologação` → `Reaberto` não é encerramento, e
+  `Em homologação pelo fiscal` é outro status. Um `SOLN` registrado com o
+  chamado já em homologação não é novo encerramento (ex.: 1681392, `SOLN` às
+  14:47:36 depois da homologação das 11:31:07).
+- O evento precisa estar dentro da posse da Virtual, com o mesmo critério do
+  Início. Entradas em homologação antes da primeira entrada na Virtual ou
+  depois de uma saída não contam; com várias passagens, valem todas as janelas.
+- Com reabertura e nova homologação, vale a **última** entrada válida. Exemplo:
+  1650824 foi para `Em homologação` em 07/11/2025 15:50:25, voltou a
+  `Aguarda atendimento` às 17:12:52 e foi de novo para homologação às 17:13:55;
+  a Data de Encerramento Virtual é 17:13:55.
+- Um `SOLN` anterior a uma reabertura não é o encerramento final: vale o
+  encerramento do último ciclo. Exemplo: 1660920 teve `SOLN` em 01/12/2025
+  18:03:15, foi reaberto (`RO`) em 02/12 19:17:32, voltou a `Em andamento` e foi
+  para homologação em 16/12 11:08:09; a Data de Encerramento Virtual é
+  16/12 11:08:09.
+- Chamado encerrado só por `SOLN`, sem `Em homologação`, fica com a data do
+  `SOLN` (ex.: 1644896, `SOLN` às 14:22:51 e `resolve_date` às 14:25:41).
+- Sem evento válido, fica **vazia**. Não há substituto por `resolve_date`,
+  `close_date`, `LOG` ou última atividade.
+
+**Encerramento Virtual x Resolução.** Na maior parte dos chamados as duas
+datas coincidem, porque o SDM grava `resolve_date` na ida para homologação;
+às vezes `resolve_date` sai 1 segundo antes do evento. Nos encerrados por
+`SOLN`, o `resolve_date` sai alguns segundos depois do `SOLN`, junto com o envio
+da pesquisa. São conceitos
+diferentes: a `Data/Hora Resolução` é o marco dos tempos (Tsol, Tempo suspenso)
+e do modo `RESOLUCAO`; a Data de Encerramento Virtual é informativa e não muda
+população, tempos nem índices.
 
 **Resolução x Fechamento.** São marcos diferentes: a resolução é a entrega da
 Virtual; o fechamento é o encerramento do chamado no SDM. Qual dos dois define
@@ -388,7 +428,8 @@ Diferenças em relação à Decision:
 | Passagens no Tempo de Atendimento | a partir da última entrada | todas as janelas de posse | a Virtual atende em mais de uma passagem; as janelas são as do motor de posse da Decision |
 | Fim do Tempo de Atendimento | 1º `SOLN`, senão `resolve_date` | Resolução (`resolve_date`), com o `SOLN` como pausa | na Virtual a entrega é a ida para `Em homologação` (`resolve_date`); o `SOLN` é raro e pode ser seguido de reabertura |
 | Estado no início | heurística pela origem do 1º `ST` | origem do 1º evento e, depois, o destino de cada evento | regra do motor de posse da Decision; a heurística trata `Aguarda fornecedor` como ativo |
-| `Tempo suspenso` | status fora dos 4 ativos do `Tempo Total Decision`, mais `SOLN` → pesquisa | posse até a Resolução − `Tsol` | a Virtual não tem `Tempo Total Decision`; o tempo pausado do `Tsol` aparece inteiro em `Tempo suspenso` |
+| `Tempo suspenso` | posse da abertura ao `close_date`, em status fora dos 4 ativos do `Tempo Total Decision` (inclui a espera em homologação até o fechamento), mais `SOLN` → pesquisa; corrido | posse até a Resolução − `Tsol`; corrido | a Virtual não tem `Tempo Total Decision`; `Tempo suspenso` é o complemento do `Tsol` no mesmo intervalo, e a homologação depois da Resolução é do cliente |
+| Data de Encerramento | última entrada em `Em homologação` na posse, por `ST`/`CL` ou `SOLN` implícito; `RE` só como fallback quando não há nenhuma | última entrada em `Em homologação` na posse, por qualquer evento de status, ou `SOLN` implícito | na Virtual o `RE` é o registro usual da homologação e já é lido como evento de status; com ele como fallback, um `SOLN` anterior a uma reabertura venceria a homologação final (1660920) |
 
 ### 7.4 Indicadores
 
@@ -456,6 +497,7 @@ Diferenças em relação à Decision:
 | 37 | Meta Atendimento | 19 | `Atende` / `Não Atende` / `N/A` |
 | 38 | Grupo | `call_req.group_id` → `ca_contact.last_name` | grupo atual do chamado no SDM; vazio sem grupo (seção 4) |
 | 39 | Indicador de Agendamento | `act_log`: transição com destino `Agendado` dentro da posse | `Sim` / `Não` (seção 7.4) |
+| 40 | Data de Encerramento Virtual | `act_log`: último encerramento dentro da posse (entrada em `Em homologação` ou `SOLN`) | data e hora; vazia sem evento válido (seção 4) |
 
 ## 9. Totais
 

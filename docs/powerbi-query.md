@@ -29,7 +29,7 @@ O bloco é **idêntico byte a byte** nos três arquivos. SHA256 do bloco, com fi
 linha LF:
 
 ```text
-2dcbcbbe785ec1f45c47eae9fc4dfec022ff6fe52430d9983a9b3132e32edf9a
+a2e051688d76dc401d351386685251fe9a17b1c27813b9c717e44c306c927f83
 ```
 
 Ele recebe só `@DataInicio`, `@DataFim` e `@DataReferencia` e entrega a
@@ -40,7 +40,7 @@ tabela `#Virt_Saida`, com os dois regimes. Os arquivos diferem apenas em:
 | Período | `@DataInicio` / `@DataFim` digitados | calculado a partir de hoje (seção 4) |
 | Saída | dois resultados (TCU e 24x7) | um arquivo por regime |
 
-As três consultas têm as mesmas 39 colunas, na mesma ordem.
+As três consultas têm as mesmas 40 colunas, na mesma ordem.
 
 Qualquer mudança de regra é feita no bloco da referência e copiada para os dois
 arquivos do Power BI. Depois da cópia, os três blocos devem continuar idênticos.
@@ -93,7 +93,7 @@ modo lê o `act_log` de todos os chamados resolvidos na janela.
 
 ## 5. Saída
 
-As mesmas 39 colunas da referência, na mesma ordem:
+As mesmas 40 colunas da referência, na mesma ordem:
 
 | # | Coluna | Unidade |
 |---|---|---|
@@ -136,6 +136,7 @@ As mesmas 39 colunas da referência, na mesma ordem:
 | 37 | Meta Atendimento | `Atende` / `Não Atende` / `N/A` |
 | 38 | Grupo | texto: grupo atual do chamado no SDM (vazio sem grupo) |
 | 39 | Indicador de Agendamento | `Sim` / `Não`: passou para `Agendado` durante a posse da Virtual |
+| 40 | Data de Encerramento Virtual | data e hora (Brasil): último encerramento da Virtual na posse (entrada em `Em homologação` ou `SOLN`); vazia se não houver |
 
 Uma linha por chamado. Os blocos e a origem de cada coluna estão em
 [virtual-calculation.md, seção 8](virtual-calculation.md#8-mapa-das-colunas).
@@ -169,7 +170,7 @@ Com o mesmo período, as duas consultas do Power BI têm as mesmas linhas e os
 mesmos valores dos dois resultados da referência com a mesma
 `@DataReferencia`. Conferido em maio/2026 (19 chamados com `FECHAMENTO`, 23 com
 `RESOLUCAO`) e na janela de 12 meses até 05/10/2026 (275 com `FECHAMENTO`, 293
-com `RESOLUCAO`): nenhuma diferença nas 39 colunas. A janela do Power BI vai até
+com `RESOLUCAO`): nenhuma diferença nas 40 colunas. A janela do Power BI vai até
 amanhã; um chamado fechado hoje aparece nele e não numa referência que termine
 hoje à 00:00.
 
