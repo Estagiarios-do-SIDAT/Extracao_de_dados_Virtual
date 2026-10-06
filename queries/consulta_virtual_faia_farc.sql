@@ -258,8 +258,11 @@ CREATE UNIQUE INDEX IX_Virt_Periodo_persid ON #Virt_Periodo (persid);
 --     marcos, nunca na data atual), com os nomes extraidos do texto padrao do
 --     act_log:
 --       TR: "Transferir Grupo de 'X' para 'Y'"
---       status: "Status alterado de 'X' para 'Y'.", em qualquer tipo de
---       registro (ST, RE = ida para homologacao, RO = reabertura, CL...)
+--       status: "Status alterado de 'X' para 'Y'.", nos registros de status
+--       do proprio chamado (ST, RE = ida para homologacao, RO = reabertura,
+--       CL, CLREQ). O texto vem de description; quando ela traz so o
+--       comentario do analista, de action_desc. Outros tipos (REL_TICKET de
+--       mudanca relacionada, LOG...) nunca viram status do chamado.
 --       SOLN: solucao registrada, que muda o status sem gravar a transicao
 --     Transferencia so de responsavel nao tem grupo_de/grupo_para e nao muda a
 --     posse.
@@ -298,20 +301,28 @@ CROSS APPLY (
                           THEN LEFT(g0.para, CHARINDEX(N'''', g0.para) - 1) END
 ) AS g
 CROSS APPLY (
-    SELECT ps = CASE WHEN t.txt LIKE N'Status alterado de %'
-                     THEN CHARINDEX(N''' para ''', t.txt) ELSE 0 END
+    SELECT txt_st = CASE
+        WHEN al.[type] NOT IN ('ST', 'RE', 'RO', 'CL', 'CLREQ') THEN NULL
+        WHEN t.txt LIKE N'Status alterado de %' THEN t.txt
+        WHEN CONVERT(nvarchar(4000), al.action_desc) LIKE N'Status alterado de %'
+            THEN CONVERT(nvarchar(4000), al.action_desc)
+    END
+) AS ts
+CROSS APPLY (
+    SELECT ps = CASE WHEN ts.txt_st IS NOT NULL
+                     THEN CHARINDEX(N''' para ''', ts.txt_st) ELSE 0 END
 ) AS ps
 CROSS APPLY (
-    SELECT status_resto = CASE WHEN ps.ps > 0 THEN SUBSTRING(t.txt, ps.ps + 8, 4000) END
+    SELECT status_resto = CASE WHEN ps.ps > 0 THEN SUBSTRING(ts.txt_st, ps.ps + 8, 4000) END
 ) AS sr
 CROSS APPLY (
     SELECT
         -- "Status alterado de '" tem 20 caracteres: a origem comeca no 21o.
-        status_de   = CASE WHEN ps.ps > 21 THEN SUBSTRING(t.txt, 21, ps.ps - 21) END,
+        status_de   = CASE WHEN ps.ps > 21 THEN SUBSTRING(ts.txt_st, 21, ps.ps - 21) END,
         status_para = CASE WHEN CHARINDEX(N'''', sr.status_resto) > 0
                            THEN LEFT(sr.status_resto, CHARINDEX(N'''', sr.status_resto) - 1) END
 ) AS st
-WHERE (al.[type] IN ('TR', 'SOLN') OR t.txt LIKE N'Status alterado de %')
+WHERE (al.[type] IN ('TR', 'SOLN') OR ts.txt_st IS NOT NULL)
   AND al.system_time >= p.open_date
   AND (p.close_date IS NULL OR al.system_time <= p.close_date);
 CREATE CLUSTERED INDEX IX_Virt_Log ON #Virt_Log (id, system_time, log_id);

@@ -29,7 +29,7 @@ O bloco é **idêntico byte a byte** nos três arquivos. SHA256 do bloco, com fi
 linha LF:
 
 ```text
-32f40fec57ef140c3df5cce7f2c62e15582d75361a2cc79a99d7d2e03bb77484
+b53862ecf92e6f5703ed953ead8506dadad9a78f01296b3e1db41f4341bd228d
 ```
 
 Ele recebe só `@DataInicio`, `@DataFim` e `@DataReferencia` e entrega a

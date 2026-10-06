@@ -331,10 +331,13 @@ Dentro da posse, o Tempo de Atendimento (`Tsol`) conta só os status
 | `Reaberto` | `REAB` | conta: reabrir corrige um encerramento indevido, e o tempo é de atendimento |
 | `Aguarda atendimento`, `Agendado`, `Aguarda fornecedor`, `Em homologação`, `Resolvido, concluído` e os demais | — | pausa; vai para `Tempo suspenso` |
 
-A linha do tempo de status vem de todo registro do `act_log` com o texto
-`Status alterado de 'X' para 'Y'.`, qualquer que seja o tipo: `ST` (mudança
-manual), `RE` (ida para `Em homologação`), `RO` (reabertura), `CL`
-(encerramento). Os eventos seguem a ordem de `system_time` e, no empate, de
+A linha do tempo de status vem dos registros de status do próprio chamado no
+`act_log`: `ST` (mudança manual), `RE` (ida para `Em homologação`), `RO`
+(reabertura), `CL` (encerramento) e `CLREQ`, com o texto
+`Status alterado de 'X' para 'Y'.`. O texto é lido de `description` e, quando
+ela traz só o comentário do analista (comum em reaberturas), de `action_desc`.
+Outros tipos não viram status do chamado: um `REL_TICKET` traz o status de uma
+mudança relacionada. Os eventos seguem a ordem de `system_time` e, no empate, de
 `act_log.id`. Na abertura vale a origem `X` do primeiro evento (sem evento,
 `Aberto, aguarda atendimento`); a partir de cada evento vale o destino `Y`, até o
 evento seguinte.

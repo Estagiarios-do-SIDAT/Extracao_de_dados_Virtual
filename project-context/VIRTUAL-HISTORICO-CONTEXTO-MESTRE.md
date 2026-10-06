@@ -786,3 +786,21 @@ Validação contra `7619f4c` (mesmo dia):
 
 SHA256 do motor (bloco com fim de linha LF):
 `32f40fec57ef140c3df5cce7f2c62e15582d75361a2cc79a99d7d2e03bb77484`.
+
+### 2026-10-06 — linha de status lê `description` e `action_desc`
+
+A linha de status lia só `description`. No SDM, parte dos registros de status
+traz o comentário do analista em `description` e a transição só em
+`action_desc`: na população publicada da A2B, 5 reaberturas (`RO`) e 1 `ST`; na
+da Decision, 29 `RE` e 73 `CL`. Na Virtual, esses registros seriam perdidos.
+
+Correção no bloco [4]: o texto de status vem de `description` ou, se ela não
+trouxer a transição, de `action_desc`, e só para registros de status do chamado
+(`ST`, `RE`, `RO`, `CL`, `CLREQ`). Assim nenhum texto arbitrário vira status, e
+um `REL_TICKET` (status de mudança relacionada) continua fora.
+
+Impacto atual: nenhum. Os 1.690 registros de status da população publicada
+trazem a transição nos dois campos; Power BI e referência sem diferença.
+
+SHA256 do motor (bloco com fim de linha LF):
+`b53862ecf92e6f5703ed953ead8506dadad9a78f01296b3e1db41f4341bd228d`.
