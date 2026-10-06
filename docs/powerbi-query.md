@@ -29,7 +29,7 @@ O bloco é **idêntico byte a byte** nos três arquivos. SHA256 do bloco, com fi
 linha LF:
 
 ```text
-a2e051688d76dc401d351386685251fe9a17b1c27813b9c717e44c306c927f83
+32f40fec57ef140c3df5cce7f2c62e15582d75361a2cc79a99d7d2e03bb77484
 ```
 
 Ele recebe só `@DataInicio`, `@DataFim` e `@DataReferencia` e entrega a
@@ -134,7 +134,7 @@ As mesmas 40 colunas da referência, na mesma ordem:
 | 35 | Acordo Qualidade | `-` |
 | 36 | Justificativa | `-` |
 | 37 | Meta Atendimento | `Atende` / `Não Atende` / `N/A` |
-| 38 | Grupo | texto: grupo atual do chamado no SDM (vazio sem grupo) |
+| 38 | Grupo | texto: grupo no instante de referência (fechamento ou resolução) |
 | 39 | Indicador de Agendamento | `Sim` / `Não`: passou para `Agendado` durante a posse da Virtual |
 | 40 | Data de Encerramento Virtual | data e hora (Brasil): último encerramento da Virtual na posse (entrada em `Em homologação` ou `SOLN`); vazia se não houver |
 
@@ -151,13 +151,14 @@ coluna numérica auxiliar de duração na saída.
 Os tempos contam só as janelas de posse da Virtual, a partir da primeira
 entrada no grupo (ver
 [virtual-calculation.md, seção 7.1](virtual-calculation.md#71-janelas-de-posse-da-virtual)).
-`Tsol (h)` conta só os status ativos; o tempo de posse em `Aguarda atendimento`,
-`Agendado`, `Reaberto`, depois de uma solução registrada e nos demais status de
-espera sai em `Tempo suspenso` (seção 7.2).
+`Tsol (h)` conta só os status ativos (`Em andamento`, `Aberto, aguarda
+atendimento` e `Reaberto`); o tempo de posse em `Aguarda atendimento`,
+`Agendado`, depois de uma solução registrada e nos demais status de espera sai
+em `Tempo suspenso` (seção 7.2).
 
-`Grupo` é o grupo atual do chamado no SDM (`call_req.group_id`), só para
-análise: não é a posse histórica da Virtual. No modo `RESOLUCAO` pode trazer
-outro grupo, quando o chamado foi resolvido na Virtual e depois transferido.
+`Grupo` é o grupo do chamado no instante de referência, pelo histórico de
+transferências: com `FECHAMENTO`, o grupo no fechamento (sempre a Virtual,
+porque é o critério do escopo); com `RESOLUCAO`, o grupo na resolução.
 
 Os chamados vêm todos juntos. Para separar por serviço ou objeto atendido,
 use os campos do próprio chamado, como `Item de Configuração` e `Categoria`.

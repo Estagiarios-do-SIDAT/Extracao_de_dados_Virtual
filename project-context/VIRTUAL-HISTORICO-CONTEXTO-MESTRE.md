@@ -51,7 +51,7 @@ O nome do arquivo não marca o fim real do período: a planilha
 
 | Tema | Decisão | Base |
 |---|---|---|
-| Escopo | I/R em status terminal (lista da Decision), grupo atual `Fornecedores - Virtual` e **encerrado na Virtual** (última transferência de grupo até o fechamento foi entrada na Virtual, ou nasceu nela sem transferência) | regra do escopo FAIA da Decision ([3.2] de `consulta_faia_farc.sql`); decisão de 2026-10-02 |
+| Escopo | I/R em status terminal (lista da Decision) e **grupo no fechamento = `Fornecedores - Virtual`** pelo histórico (última transferência de grupo até o fechamento foi entrada na Virtual, ou nasceu nela sem transferência); o grupo atual não decide | regra do escopo FAIA da Decision ([3.2] de `consulta_faia_farc.sql`); decisão de 2026-10-02 |
 | Período | data escolhida em `@DataReferencia`, semiaberto, sem substituição entre as datas. `FECHAMENTO` (padrão): `close_date`, status terminal, grupo atual e encerramento na Virtual. `RESOLUCAO`: `resolve_date` dentro de uma janela de posse da Virtual, `close_date` opcional | fechamento: regra da Decision ([1] de `consulta_faia_farc.sql`), decisão de 2026-10-02; chave de troca: 2026-10-05 |
 | DCIM (removida da arquitetura em 2026-10-02) | `log_agent` = automação (`Usuário de Serviço - ServiceDesk`) **e** IC `dcim` | 60/60; coincide com `%AFFECTED_RC=dcim` da mensagem de criação em toda a população de 2025–2026 (267 chamados) |
 | Regime | Parâmetros por Tipo + Prioridade (P1/P2 = 24x7) | nenhum campo do SDM traz o regime |
@@ -61,7 +61,7 @@ O nome do arquivo não marca o fim real do período: a planilha
 | Horário comercial | 08–20h, seg–sex, fora das datas com `Conta_SLA = 'N'`, calculado dia a dia | reproduz todas as células K/M com fórmula íntegra |
 | 24x7 | comerciais = 0; excesso sobre tempo corrido | planilhas de 2026; FARC real em 1719182 (28,218) |
 | Índice FAIA | horas × fator (com ×24) | 1ª linha de todas as abas, FARC inteiro, FAIA real de 1714513 (3,226) |
-| Status de espera | pausam o Tsol: só `Em andamento` e `Aberto, aguarda atendimento` contam; o resto da posse até a Resolução vai para `Tempo suspenso`. Linha de status: toda transição textual do `act_log` (ST, RE, RO, CL) e o `SOLN` como pausa | status ativos do Tempo de Atendimento da Decision ([9.2]); SOLN implícito da Decision ([8.2]); decisão de 2026-10-05 (até então não suspendiam, como nas fórmulas das planilhas) |
+| Status de espera | pausam o Tsol: contam `Em andamento`, `Aberto, aguarda atendimento` e `Reaberto`; o resto da posse até a Resolução vai para `Tempo suspenso`. Linha de status: toda transição textual do `act_log` (ST, RE, RO, CL) e o `SOLN` como pausa | orientação do gerente de 2026-10-06 (Reaberto conta), que prevalece sobre a decisão de 2026-10-05 de manter só os ativos do Tempo de Atendimento da Decision |
 | Posse | relógio começa na 1ª entrada na Virtual (abertura, se nasceu nela); saídas pausam, reentradas reativam, janelas somadas | janelas de posse da Decision ([8.1]); decisão de 2026-10-02 |
 | Fechamento | `Data/Hora Fechamento` = `close_date` (= evento CL, ±1 s) | 265 chamados do escopo com CL: 258 no mesmo segundo, 7 com 1 s de diferença de gravação |
 | Formato | 10 durações em texto `[h]:mm:ss`; cálculo em segundos; fatores e índices numéricos | igual às planilhas |
@@ -730,3 +730,59 @@ Validação contra `f57148d`:
 
 SHA256 do motor (bloco com fim de linha LF):
 `a2e051688d76dc401d351386685251fe9a17b1c27813b9c717e44c306c927f83`.
+
+### 2026-10-06 — orientação do gerente: `Reaberto` conta e escopo pelo grupo no fechamento
+
+Esta decisão é posterior e prevalece sobre as anteriores nos pontos abaixo.
+
+**Reaberto conta como atendimento.** Orientação do gerente sobre o SDM 1710057
+(Decision): analistas encerram por engano como `Resolvido, concluído` quando
+deveriam ir para `Em homologação`; o correto é reabrir e pôr o status certo,
+e "conta o tempo sim". Fica superada a decisão de 2026-10-05 que deixava
+`Reaberto` fora do `Tsol`. Na Virtual, `REAB` passou a ser ativo na linha de
+status ([9]), dentro da posse. Efeito em 12 meses: só 1660920 tem `Reaberto` na
+posse antes da Resolução (6 s, 02/12/2025 19:17:32–19:17:38): Tsol
+335:12:23 → 335:12:29, Tempo suspenso 25:17:20 → 25:17:14, Indice FARC
+16,641278 → 16,641611. Nenhum outro valor mudou; `Tini` e o `Indicador
+Reabertura` não mudaram.
+
+**Escopo de FECHAMENTO pelo grupo no fechamento.** Orientação do gerente sobre
+1651174: a resolução foi feita pelo COI (Lucas dos Santos do Amaral) e "pode
+considerar do COI". Auditoria:
+
+- 1651174 nunca entrou no `FECHAMENTO` da Virtual: fechou em 24/07/2026 no COI
+  (transferência Virtual → COI em 20/07 15:49:23). A linha com `Grupo = COI`
+  vinha do modo `RESOLUCAO`, em que a coluna mostrava o grupo atual.
+- Em todo o histórico (fechamentos de 01/01/2025 a 06/10/2026 de chamados que
+  passaram pela Virtual), 276 chamados tinham grupo no fechamento = Virtual e
+  9 tinham outro grupo (1644738, 1648369, 1651174, 1694191, 1731981, 1732058,
+  1732136, 1732146, 1735108, todos fechados no COI). O critério antigo (grupo
+  atual + cadeia de transferências) e o histórico concordam nos 285; não há
+  transferência no mesmo segundo do fechamento.
+
+Mudança: o pré-filtro de `FECHAMENTO` deixou de exigir o grupo atual (passa a
+aceitar quem teve transferência para a Virtual, como o `RESOLUCAO`); a decisão
+é só pela cadeia de transferências até o fechamento, com desempate pelo
+`act_log.id` do `CL` no mesmo segundo. População idêntica. A consulta com
+`FECHAMENTO` fica mais lenta (lê o `act_log` dos fechados do período).
+
+`Grupo` passa a ser derivado do histórico: grupo no fechamento (`FECHAMENTO`,
+sempre `Fornecedores - Virtual`) ou na resolução (`RESOLUCAO`). Em 12 meses, só
+1651174 muda (de `COI`, grupo atual, para `Fornecedores - Virtual`, grupo no
+instante da resolução).
+
+Pendente de decisão, sem alteração: no modo `RESOLUCAO`, 1651174 continua,
+porque pelo SDM a resolução (20/07 11:19:27) foi gravada com o chamado no grupo
+Virtual. Quem a registrou foi um analista do COI. Excluí-lo exigiria atribuir a
+resolução por quem a executou, e não pelo grupo, o que seria uma regra nova.
+
+Validação contra `7619f4c` (mesmo dia):
+
+- população idêntica em todas as janelas e modos;
+- `FECHAMENTO` 12 meses com `Grupo <> Virtual` = 0;
+- modelo independente = SQL (293/293);
+- os dois modos dão os mesmos valores;
+- Power BI x referência sem diferença.
+
+SHA256 do motor (bloco com fim de linha LF):
+`32f40fec57ef140c3df5cce7f2c62e15582d75361a2cc79a99d7d2e03bb77484`.

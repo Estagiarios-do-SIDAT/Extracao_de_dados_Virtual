@@ -53,7 +53,7 @@ Uma linha por chamado. As colunas vêm em três blocos (lista completa na seçã
 | A — identificação e datas | 1 a 9: do `ID Chamado` até `Data/Hora Fechamento` |
 | B — apuração da Virtual | 10 a 24: `Tini (h)` até `Indice FAIA` |
 | C — contexto no padrão da Decision | 25 a 37: `Status` até `Meta Atendimento` |
-| D — grupo atual, agendamento e encerramento | 38: `Grupo`; 39: `Indicador de Agendamento`; 40: `Data de Encerramento Virtual` |
+| D — grupo, agendamento e encerramento | 38: `Grupo`; 39: `Indicador de Agendamento`; 40: `Data de Encerramento Virtual` |
 
 Os chamados vêm todos juntos, separados só pelo regime. Para distinguir o
 serviço ou o objeto atendido, use os dados do próprio chamado:
@@ -81,15 +81,17 @@ entra. Qualquer outro valor de `@DataReferencia` interrompe a consulta com o err
 1. `close_date` está preenchido e cai em `[@DataInicio, @DataFim)`;
 2. está em **status terminal**: `CL`, `CLD`, `CLUNRSLV`, `CNCL`, `ATGR`, `END`,
    `PC`, `RE` ou `VARES` (a mesma lista da Decision, lida por código);
-3. o **grupo atual** é `Fornecedores - Virtual`;
-4. **encerrou na Virtual**: nasceu na Virtual e nunca teve transferência de
-   grupo, ou a **última transferência de grupo até o fechamento** foi uma
-   entrada na Virtual.
+3. o **grupo no fechamento** é `Fornecedores - Virtual`: nasceu na Virtual e
+   nunca teve transferência de grupo, ou a **última transferência de grupo até
+   o fechamento** foi uma entrada na Virtual.
 
-O item 4 é verificado pela cadeia de transferências do `act_log` (`TR`,
-`Transferir Grupo de 'X' para 'Y'`), em ordem de `system_time` e `act_log.id`,
-e não só pelo grupo atual. Um chamado `COI → Virtual → COI → fechamento` não é
-encerramento da Virtual e fica fora.
+O item 3 é verificado pela cadeia de transferências do `act_log` (`TR`,
+`Transferir Grupo de 'X' para 'Y'`), em ordem de `system_time` e `act_log.id`;
+o grupo atual do cadastro não decide. Ter passado pela Virtual não basta: um
+chamado `COI → Virtual → COI → fechamento` fechou no COI e fica fora (ex.:
+1651174, fechado em 24/07/2026 no COI). Uma transferência gravada no mesmo
+segundo do fechamento conta antes dele, salvo se o registro `CL` desse segundo
+tiver `act_log.id` menor.
 
 **RESOLUCAO.** O chamado entra quando:
 
@@ -177,12 +179,16 @@ chamado estiver em atendimento aberto. Nos chamados do escopo, `resolve_date`
 coincide com a última entrada em `Em homologação` dentro da posse da Virtual,
 com no máximo 1 segundo de diferença de gravação.
 
-**Grupo.** A coluna `Grupo` mostra o grupo associado ao chamado no SDM no
-momento da consulta (`call_req.group_id`, pelo nome em `ca_contact`): para
-chamado fechado, o grupo final; para chamado ainda aberto, o grupo atual. É
-informativa e diferente das janelas históricas de posse: não define escopo,
-período, responsabilidade nem tempos. Um chamado resolvido na Virtual e depois
-devolvido ao COI aparece no modo `RESOLUCAO` com `Grupo = COI` (ex.: 1651174).
+**Grupo.** A coluna `Grupo` é o grupo do chamado no instante de referência,
+pela linha do tempo de transferências de grupo (grupo inicial e
+transferências, em ordem de `system_time` e `act_log.id`):
+
+- `FECHAMENTO`: o grupo no fechamento, o mesmo que decide o escopo; como o
+  escopo exige a Virtual, todas as linhas trazem `Fornecedores - Virtual`;
+- `RESOLUCAO`: o grupo no instante da resolução (última transferência de
+  grupo antes de `resolve_date`). Um chamado resolvido na Virtual e transferido
+  depois traz `Fornecedores - Virtual` (ex.: 1651174, resolvido em 20/07/2026
+  11:19:27 e transferido ao COI às 15:49:23).
 
 **Data de Encerramento Virtual.** É o equivalente da Data de Encerramento
 Decision: o momento em que a Virtual encerrou sua atuação no chamado.
@@ -316,13 +322,14 @@ Exemplos:
 ### 7.2 Status ativos e Tempo suspenso
 
 Dentro da posse, o Tempo de Atendimento (`Tsol`) conta só os status
-**ativos**, os mesmos da Decision:
+**ativos**:
 
 | Status | Código | Tsol |
 |---|---|---|
 | `Em andamento` | `FIP` | conta |
 | `Aberto, aguarda atendimento` | `OP` | conta |
-| `Aguarda atendimento`, `Agendado`, `Aguarda fornecedor`, `Em homologação`, `Reaberto`, `Resolvido, concluído` e os demais | — | pausa; vai para `Tempo suspenso` |
+| `Reaberto` | `REAB` | conta: reabrir corrige um encerramento indevido, e o tempo é de atendimento |
+| `Aguarda atendimento`, `Agendado`, `Aguarda fornecedor`, `Em homologação`, `Resolvido, concluído` e os demais | — | pausa; vai para `Tempo suspenso` |
 
 A linha do tempo de status vem de todo registro do `act_log` com o texto
 `Status alterado de 'X' para 'Y'.`, qualquer que seja o tipo: `ST` (mudança
@@ -336,8 +343,9 @@ Um `SOLN` (solução registrada) muda o status sem gravar a transição. Como na
 Decision, ele entra na linha do tempo como passagem para um status não ativo,
 que vale até o evento seguinte. Exemplo (SDM 1660920): solução em 01/12 18:03:15,
 reabertura (`RO`, `Resolvido, concluído` → `Reaberto`) em 02/12 19:17:32 e volta
-a `Em andamento` às 19:17:38. As 25:14:23 entre a solução e a volta ao
-atendimento são `Tempo suspenso`, e não `Tsol`.
+a `Em andamento` às 19:17:38. As 25:14:17 entre a solução e a reabertura são
+`Tempo suspenso`; os 6 segundos em `Reaberto` e o atendimento seguinte contam no
+`Tsol`.
 
 `Tsol` é a interseção, até a Resolução, das janelas de posse com os trechos
 ativos, somada em todas as janelas. `Tempo suspenso` é o restante da posse
@@ -415,9 +423,9 @@ A arquitetura é a da Decision; a Virtual mantém o próprio regime, calendário
 horário 08–20, metas e fatores. A Decision tem dois motores com listas de
 status ativos diferentes: o do `Tempo Total Decision` e do `Tempo suspenso`
 (ativos: `Aberto, aguarda atendimento`, `Aguarda atendimento`, `Em andamento`,
-`Reaberto`) e o do `Tempo de Atendimento`, que gera o FARC (ativos: só
-`Em andamento` e `Aberto, aguarda atendimento`). O `Tsol` segue o segundo,
-porque é ele que define o excesso e o índice.
+`Reaberto`) e o do `Tempo de Atendimento`, que gera o FARC (ativos:
+`Em andamento`, `Aberto, aguarda atendimento` e `Reaberto`). O `Tsol` segue o
+segundo, porque é ele que define o excesso e o índice.
 
 Diferenças em relação à Decision:
 
@@ -439,11 +447,11 @@ Diferenças em relação à Decision:
 | `Indicador Reabertura` | o chamado foi reaberto? | `act_log` com tipo contendo `reab` ou descrição/ação contendo `reabert`, em todo o histórico do chamado (regra [6] da Decision) | não | `Sim` / `Não` |
 | `Indicador de Agendamento` | o chamado passou para `Agendado` enquanto estava com a Virtual? | registro de status do `act_log` com **destino** `Agendado` (código `AGENDADO`), dentro de uma janela de posse | sim | `Sim` / `Não` |
 
-- **Reabertura não é tempo ativo.** `Indicador Reabertura = Sim` só diz que
-  houve reabertura. O status `Reaberto` pausa o `Tsol` como qualquer status não
-  ativo; o atendimento volta a contar quando o chamado volta a `Em andamento`
-  ou `Aberto, aguarda atendimento`. Exemplo: 1660920, reaberto por `RO` em
-  02/12/2025 19:17:32 (`Resolvido, concluído` → `Reaberto`).
+- **Indicador não é cronômetro.** `Indicador Reabertura = Sim` só diz que
+  houve reabertura. O tempo em `Reaberto` é contado à parte, no `Tsol`, e só
+  dentro da posse da Virtual. Exemplo: 1660920, reaberto por `RO` em
+  02/12/2025 19:17:32 (`Resolvido, concluído` → `Reaberto`); os 6 segundos até
+  `Em andamento` entram no `Tsol`.
 - **Agendamento pelo destino.** Só conta a transição *para* `Agendado`
   (`Em andamento` → `Agendado`). `Agendado` → `Em andamento` não prova entrada em
   `Agendado`. O evento precisa estar dentro da posse com o mesmo critério do
@@ -495,7 +503,7 @@ Diferenças em relação à Decision:
 | 35 | Acordo Qualidade | — | `-` |
 | 36 | Justificativa | — | `-` |
 | 37 | Meta Atendimento | 19 | `Atende` / `Não Atende` / `N/A` |
-| 38 | Grupo | `call_req.group_id` → `ca_contact.last_name` | grupo atual do chamado no SDM; vazio sem grupo (seção 4) |
+| 38 | Grupo | `act_log` (transferências de grupo) | grupo no fechamento (`FECHAMENTO`) ou na resolução (`RESOLUCAO`) (seção 4) |
 | 39 | Indicador de Agendamento | `act_log`: transição com destino `Agendado` dentro da posse | `Sim` / `Não` (seção 7.4) |
 | 40 | Data de Encerramento Virtual | `act_log`: último encerramento dentro da posse (entrada em `Em homologação` ou `SOLN`) | data e hora; vazia sem evento válido (seção 4) |
 

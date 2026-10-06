@@ -64,9 +64,10 @@ use o dia 1 do mês e o dia 1 do mês seguinte, por exemplo `2026-07-01` e
 Em resumo:
 
 - **Escopo:** chamados I/R do período. Em `FECHAMENTO`: fechados, em status
-  terminal, com grupo atual `Fornecedores - Virtual` e que encerraram na
-  Virtual (última transferência de grupo foi uma entrada na Virtual, ou
-  nasceram nela sem transferência). Em `RESOLUCAO`: resolvidos dentro de uma
+  terminal, cujo grupo **no fechamento** era `Fornecedores - Virtual`, pelo
+  histórico de transferências (última transferência de grupo até o fechamento
+  foi uma entrada na Virtual, ou nasceram nela sem transferência). Ter passado
+  pela Virtual não basta. Em `RESOLUCAO`: resolvidos dentro de uma
   janela de posse da Virtual, fechados ou não.
 - **Regime:** TCU ou 24x7, pela combinação Tipo + Prioridade.
 - **Posse:** o relógio começa na primeira entrada na Virtual (na abertura, se
@@ -76,16 +77,17 @@ Em resumo:
   tempo de posse até o primeiro `Em andamento` dentro da posse (sem ele, a
   primeira atividade registrada na posse; sem atividade, a entrada). `Tsol (h)`
   é o Tempo de Atendimento: tempo de posse até a resolução, contando só os
-  status ativos `Em andamento` e `Aberto, aguarda atendimento`, como no Tempo de
-  Atendimento da Decision; os demais (`Aguarda atendimento`, `Agendado`,
-  `Reaberto`, solução registrada...) pausam e vão para `Tempo suspenso`.
+  status ativos `Em andamento`, `Aberto, aguarda atendimento` e `Reaberto`; os
+  demais (`Aguarda atendimento`, `Agendado`, solução registrada...) pausam e vão
+  para `Tempo suspenso`.
   `Excesso Resposta (h)` e `Excesso Resolução (h)` correspondem ao Primeiro
   Atendimento Excedido e ao Tempo Atendimento Excedido da Decision.
 - **Colunas:** identificação e datas (com `Data/Hora Fechamento`), as 15
   colunas de apuração da Virtual e colunas de contexto no padrão da Decision,
   entre elas `Item de Configuração` e `Categoria`, que identificam o serviço ou
-  o objeto atendido. `Grupo` (coluna 38) é o grupo atual do chamado no SDM
-  (`call_req.group_id`); é informativa e não é a posse histórica da Virtual.
+  o objeto atendido. `Grupo` (coluna 38) é o grupo do chamado no instante de
+  referência, pelo histórico de transferências: no fechamento (`FECHAMENTO`) ou
+  na resolução (`RESOLUCAO`).
   `Tempo suspenso` é o tempo de posse até a resolução em status que pausam;
   `Tsol` + `Tempo suspenso` = posse total até a resolução. As durações saem como
   `[h]:mm:ss`; fatores e índices são numéricos e calculados em segundos.
@@ -93,7 +95,8 @@ Em resumo:
   reaberto em algum momento (mesma regra da Decision). `Indicador de
   Agendamento` (coluna 39) diz se o chamado passou para `Agendado` durante a
   posse da Virtual. Os dois são informativos: não mudam tempos, excessos nem
-  índices. Reabertura não é tempo ativo: o status `Reaberto` pausa o `Tsol`.
+  índices. O indicador só diz que houve reabertura; o tempo em `Reaberto`
+  dentro da posse conta no `Tsol`, como status ativo.
 - **Data de Encerramento Virtual (última coluna, 40):** o último encerramento
   da atuação da Virtual durante a posse, por entrada em `Em homologação` ou por
   `SOLN` (solução registrada), como a Data de Encerramento Decision. Com

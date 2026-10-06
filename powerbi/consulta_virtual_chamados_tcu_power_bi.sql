@@ -153,7 +153,9 @@ VALUES
 -- [3] Candidatos do periodo, conforme @DataReferencia. Sem substituicao entre
 --     as datas: se a data do modo estiver vazia, o chamado nao entra.
 --     FECHAMENTO: close_date no periodo, I/R, status terminal (mesma lista da
---       Decision, por codigo) e grupo atual 'Fornecedores - Virtual'.
+--       Decision, por codigo), com grupo atual Virtual ou alguma transferencia
+--       de grupo para a Virtual. A exigencia de o grupo NO FECHAMENTO ser a
+--       Virtual (historico de transferencias) e aplicada em [5]/[6.2].
 --     RESOLUCAO: resolve_date no periodo, I/R, com grupo atual Virtual ou
 --       alguma transferencia de grupo para a Virtual. A exigencia de a
 --       resolucao ter ocorrido na posse da Virtual e aplicada em [6.2].
@@ -183,7 +185,16 @@ WHERE r.[type] IN ('I', 'R')
          AND r.close_date IS NOT NULL
          AND r.close_date >= @IniEpoch
          AND r.close_date <  @FimEpoch
-         AND r.group_id = @GrupoVirtual
+         AND (    r.group_id = @GrupoVirtual
+               OR EXISTS (
+                      SELECT 1
+                      FROM dbo.act_log AS al
+                      WHERE al.call_req_id = r.persid
+                        AND al.[type] = 'TR'
+                        AND CONVERT(nvarchar(4000), al.[description])
+                            LIKE N'%Transferir Grupo de %para ''' + @GrupoVirtualNome + N'''%'
+                  )
+             )
          AND r.status IN (
                 'CL',        -- Resolvido, concluido
                 'CLD',       -- Fechado, Solucao Implantada
@@ -285,7 +296,10 @@ CREATE CLUSTERED INDEX IX_Virt_Log ON #Virt_Log (id, system_time, log_id);
 --     Nasceu no grupo = o grupo de origem da primeira transferencia de grupo e
 --     o Virtual; sem transferencia de grupo, vale o grupo atual.
 --     Encerrou na Virtual = sem transferencia de grupo (nasceu e ficou), ou a
---     ULTIMA transferencia de grupo ate o fechamento foi uma entrada na Virtual.
+--     ULTIMA transferencia de grupo ate o fechamento foi uma entrada na Virtual:
+--     o grupo NO FECHAMENTO e a Virtual. Transferencia gravada no mesmo segundo
+--     do fechamento conta antes dele, salvo se o registro CL desse segundo tiver
+--     act_log.id menor (gravado antes da transferencia).
 --------------------------------------------------------------------------------
 IF OBJECT_ID('tempdb..#Virt_GrupoInicial') IS NOT NULL DROP TABLE #Virt_GrupoInicial;
 SELECT
@@ -306,6 +320,15 @@ OUTER APPLY (
     FROM #Virt_Log AS l
     WHERE l.id = p.id
       AND l.grupo_para IS NOT NULL
+      AND NOT EXISTS (
+            SELECT 1
+            FROM #Virt_Log AS f
+            WHERE f.id = l.id
+              AND f.[type] = 'CL'
+              AND f.system_time = p.close_date
+              AND l.system_time = p.close_date
+              AND f.log_id < l.log_id
+      )
     ORDER BY l.system_time DESC, l.log_id DESC
 ) AS ult
 LEFT JOIN dbo.ca_contact AS ga
@@ -647,17 +670,18 @@ WHERE DATEDIFF(DAY, '19000101', d.Dia) % 7 < 5
 --     primeiro evento de status (sem evento, 'Aberto, aguarda atendimento'); cada
 --     evento de status (ST, RE, RO, CL...) passa a valer o status de destino ate
 --     o proximo, em ordem de system_time e act_log.id. Um SOLN e uma entrada
---     implicita em status nao ativo, como na Decision. Ativos, como no Tempo de
---     Atendimento da Decision: 'Em andamento' (FIP) e 'Aberto, aguarda
---     atendimento' (OP). Os demais (Aguarda atendimento, Agendado, Em
---     homologacao, Reaberto...) pausam o Tempo de Atendimento.
+--     implicita em status nao ativo, como na Decision. Ativos: 'Em andamento'
+--     (FIP), 'Aberto, aguarda atendimento' (OP) e 'Reaberto' (REAB; orientacao
+--     do gerente de 2026-10-06: a reabertura corrige um encerramento indevido e
+--     o tempo conta). Os demais (Aguarda atendimento, Agendado, Em
+--     homologacao...) pausam o Tempo de Atendimento.
 --------------------------------------------------------------------------------
 IF OBJECT_ID('tempdb..#Virt_StatusLinha') IS NOT NULL DROP TABLE #Virt_StatusLinha;
 SELECT
     c.id,
     c.abertura_epoch AS momento,
     0 AS ordem,
-    CASE WHEN pe.code_de IS NULL OR pe.code_de IN ('FIP', 'OP') THEN 1 ELSE 0 END AS ativo
+    CASE WHEN pe.code_de IS NULL OR pe.code_de IN ('FIP', 'OP', 'REAB') THEN 1 ELSE 0 END AS ativo
 INTO #Virt_StatusLinha
 FROM #Virt_Chamado AS c
 OUTER APPLY (
@@ -674,7 +698,7 @@ SELECT
     l.id,
     l.system_time,
     l.log_id,
-    CASE WHEN sd.code IN ('FIP', 'OP') THEN 1 ELSE 0 END
+    CASE WHEN sd.code IN ('FIP', 'OP', 'REAB') THEN 1 ELSE 0 END
 FROM #Virt_Log AS l
 JOIN #Virt_Chamado AS c
     ON c.id = l.id
@@ -911,9 +935,13 @@ SELECT
     CASE WHEN c.exc_sol_s IS NULL THEN N'N/A'
          WHEN c.exc_sol_s > 0 THEN N'Não Atende'
          ELSE N'Atende' END AS [Meta Atendimento],
-    -- Grupo atual do chamado no SDM (call_req.group_id), pelo nome do cadastro.
-    -- Informativo: nao e a posse historica nem participa do escopo.
-    LTRIM(RTRIM(grp.last_name)) AS [Grupo],
+    -- Grupo no instante de referencia, pela linha do tempo de transferencias:
+    -- FECHAMENTO = grupo no fechamento (o mesmo que decide o escopo em [5]);
+    -- RESOLUCAO = grupo no instante da resolucao (ultima transferencia de grupo
+    -- antes de resolve_date; sem transferencia, o grupo inicial).
+    CASE WHEN @DataReferencia = N'FECHAMENTO'
+         THEN COALESCE(gi.grupo_ultima_transferencia, gi.grupo_inicial)
+         ELSE COALESCE(gres.grupo_para, gi.grupo_inicial) END AS [Grupo],
     -- Indicador de Agendamento: houve ao menos uma transicao com DESTINO
     -- 'Agendado' (em qualquer registro de status do act_log) dentro da posse da
     -- Virtual, com o mesmo criterio de posse do Inicio. Informativo: nao muda
@@ -959,8 +987,18 @@ LEFT JOIN dbo.ca_contact AS asg
     ON asg.contact_uuid = m.assignee
 LEFT JOIN dbo.ca_owned_resource AS ic
     ON ic.own_resource_uuid = m.affected_rc
-LEFT JOIN dbo.ca_contact AS grp
-    ON grp.contact_uuid = m.group_id
+LEFT JOIN #Virt_GrupoInicial AS gi
+    ON gi.id = m.id
+LEFT JOIN #Virt_Chamado AS ch
+    ON ch.id = m.id
+OUTER APPLY (
+    SELECT TOP (1) l.grupo_para
+    FROM #Virt_Log AS l
+    WHERE l.id = m.id
+      AND l.grupo_para IS NOT NULL
+      AND l.system_time < ch.resolve_date_sdm
+    ORDER BY l.system_time DESC, l.log_id DESC
+) AS gres
 -- [h]:mm:ss a partir de segundos inteiros: horas = s / 3600 (sem limite de 24),
 -- minutos = (s % 3600) / 60, segundos = s % 60.
 CROSS APPLY (
