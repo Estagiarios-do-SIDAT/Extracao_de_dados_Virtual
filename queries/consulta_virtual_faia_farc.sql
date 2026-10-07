@@ -5,19 +5,23 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 --------------------------------------------------------------------------------
 -- Consulta de referencia FAIA + FARC - Virtual
 --
--- Apuracao do fornecedor Virtual a partir do SDM, com a mesma arquitetura de
--- posse da Decision (Extracao_de_dados_Decision) e os parametros, o calendario
--- e o horario comercial proprios da Virtual. Devolve UM result set com todos
--- os chamados elegiveis; a coluna [Tipo SLA] diz o regime de cada um:
+-- Apuracao do fornecedor Virtual a partir do SDM. Fonte funcional: Edital
+-- PE 90028/2025 e anexos, em especial o Anexo VII (Niveis Minimos de Servico):
+-- metas e cobertura da Tabela 1, fatores da Tabela 2, marcos T0/T1/T2 dos
+-- itens 3.1.6 a 3.1.8, Horario TCU e 24x7 dos itens 3.1.13 e 3.1.14. Parte da
+-- tecnica (leitura do act_log, janelas de posse) foi reaproveitada da Decision,
+-- mas a regra vem do contrato. Devolve UM result set com todos os chamados
+-- elegiveis; a coluna [Contagem] diz a janela de contagem de cada um (no
+-- Anexo VII, a coluna "Cobertura" da Tabela 1):
 --
---   Corrida   = P1 e P2 (antigo regime 24x7): tempo corrido, 24 h por dia;
---   Comercial = P3 a P5 (antigo regime TCU): seg-sex, 08:00-20:00, sem
---               feriados e pontos facultativos.
+--   24x7        = P1 e P2: 00:00:00-23:59:59, todos os dias (3.1.14);
+--   Horario TCU = P3 a P5: 08:00-20:00, segunda a sexta, dias uteis, sem
+--                 feriados e pontos facultativos (3.1.13).
 --
--- O mesmo regime vale para o primeiro atendimento (Tini) e para a resolucao
--- (Tsol): ha um unico regime por Tipo + Prioridade (bloco [1]).
+-- A mesma Contagem vale para a resposta inicial (Tini) e para a resolucao
+-- (Tsol): uma por Tipo + Prioridade (bloco [1]).
 --
--- Regras (detalhe em docs/virtual-calculation.md):
+-- Regras (detalhe e rastreabilidade em docs/virtual-calculation.md):
 --   Periodo     data escolhida em @DataReferencia dentro de
 --               [@DataInicio, @DataFim), horario do Brasil. A chave so muda
 --               quais chamados entram; nenhum calculo muda.
@@ -29,26 +33,31 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 --                 Virtual).
 --               RESOLUCAO: resolve_date no periodo e a resolucao ocorreu dentro
 --                 de uma janela de posse da Virtual. close_date pode ser NULL.
---   Regime      vem da tabela de parametros pela combinacao Tipo + Prioridade.
+--   Contagem    vem da tabela de parametros pela combinacao Tipo + Prioridade.
 --   Posse       janelas em que o chamado esteve no grupo Virtual, pela linha do
---               tempo de transferencias de grupo. O relogio comeca na primeira
---               entrada (ou na abertura, se nasceu na Virtual), para nas saidas,
---               volta nas reentradas; todas as janelas sao somadas.
---   Inicio      primeira passagem para 'Em andamento' feita enquanto o chamado
---               esta no grupo Virtual (a captura da Decision). Sem ela, a
---               primeira atividade registrada na posse (act_log, exceto
+--               tempo de transferencias de grupo. Usada pelo Inicio e pelo Tini
+--               (congelados) e pela coluna informativa Tempo Fora Grupo
+--               Virtual; nao desconta tempo do Tsol.
+--   Inicio      [CONGELADO] primeira passagem para 'Em andamento' feita
+--               enquanto o chamado esta no grupo Virtual. Sem ela, a primeira
+--               atividade registrada na posse (act_log, exceto
 --               transferencias); sem atividade, a entrada na Virtual.
---   Tini        Tempo Primeiro Atendimento: tempo de posse ate o Inicio.
---   Tsol        Tempo de Atendimento: tempo de posse ate a Resolucao em status
---               ativo ('Em andamento', 'Aberto, aguarda atendimento' ou
---               'Reaberto'). Os demais status pausam e vao para Tempo suspenso.
---   Resolucao   call_req.resolve_date; se vazio, o ultimo evento RE (passagem
---               para 'Em homologacao'), desde que o chamado nao esteja em
---               status de atendimento aberto.
+--   Tini        [CONGELADO] Tempo Primeiro Atendimento: tempo de posse ate o
+--               Inicio. Diverge do T1 - T0 do Anexo VII (3.1.6/3.1.7), por
+--               decisao do usuario de nao alterar o primeiro atendimento.
+--   Tsol        T0 (registro, call_req.open_date) ate T2 (Resolucao), sem os
+--               intervalos de homologacao ('Em homologacao' e 'Em homologacao
+--               pelo fiscal') antes da Resolucao (Anexo VII 3.1.8). Suspensao
+--               justificada nao e descontada: o SDM nao registra a anuencia do
+--               TCU (3.4.4, 3.6.1). Tempo Agendado e Tempo Fora Grupo Virtual
+--               saem em colunas proprias para o fiscal avaliar.
+--   Resolucao   T2: call_req.resolve_date; se vazio, o ultimo evento RE
+--               (passagem para 'Em homologacao'), desde que o chamado nao esteja
+--               em status de atendimento aberto.
 --   Fechamento  call_req.close_date.
---   Horario     Comercial (TCU): 08:00-20:00, segunda a sexta, fora dos
---               feriados e pontos facultativos (bloco [2], arquivo de
---               feriados). Corrida (24x7): tempo corrido.
+--   Horario     Horario TCU: 08:00-20:00, segunda a sexta, fora dos feriados e
+--               pontos facultativos (bloco [2], arquivo de feriados). 24x7:
+--               tempo corrido.
 --
 -- Unidades: as colunas de duracao saem como texto [h]:mm:ss; o calculo e
 -- feito em segundos. Indice = horas de excesso x fator, em pontos percentuais.
@@ -69,7 +78,7 @@ DECLARE @DataReferencia nvarchar(20) = N'FECHAMENTO';
 
 -- >>> MOTOR VIRTUAL ------------------------------------------------------------
 -- Bloco identico nos dois arquivos (queries/ e powerbi/). Usa so @DataInicio,
--- @DataFim e @DataReferencia e entrega #Virt_Saida com os dois regimes.
+-- @DataFim e @DataReferencia e entrega #Virt_Saida com as duas Contagens.
 
 IF @DataReferencia IS NULL OR @DataReferencia NOT IN (N'RESOLUCAO', N'FECHAMENTO')
 BEGIN
@@ -88,13 +97,14 @@ DECLARE @GrupoVirtual   varbinary(16) = 0x21679DF702A0EC478B1468D89E769836; -- F
 DECLARE @GrupoVirtualNome nvarchar(200) =
     (SELECT LTRIM(RTRIM(c.last_name)) FROM dbo.ca_contact AS c WHERE c.contact_uuid = @GrupoVirtual);
 
--- Janela comercial do regime TCU.
+-- Horario TCU (Anexo VII 3.1.13): das 8h as 20h.
 DECLARE @HoraInicioComercial int = 8;
 DECLARE @HoraFimComercial    int = 20;
 
 --------------------------------------------------------------------------------
--- [1] Parametros da Virtual: metas (em horas), regime e fatores por Tipo +
---     Prioridade.
+-- [1] Parametros da Virtual por Tipo + Prioridade, transcritos do Anexo VII:
+--     Tabela 1 (resposta inicial, resolucao e cobertura = Contagem) e
+--     Tabela 2 (fatores FAIA e FARC, % por hora ou fracao excedida).
 --------------------------------------------------------------------------------
 IF OBJECT_ID('tempdb..#Virt_Parametros') IS NOT NULL DROP TABLE #Virt_Parametros;
 CREATE TABLE #Virt_Parametros (
@@ -102,26 +112,26 @@ CREATE TABLE #Virt_Parametros (
     Prioridade     int NOT NULL,
     MetaRespostaH  decimal(9,4) NOT NULL,
     MetaResolucaoH decimal(9,4) NOT NULL,
-    Regime         nvarchar(10) COLLATE DATABASE_DEFAULT NOT NULL,
+    Contagem       nvarchar(20) COLLATE DATABASE_DEFAULT NOT NULL,
     FatorFAIA      decimal(9,4) NOT NULL,
     FatorFARC      decimal(9,4) NOT NULL,
     PRIMARY KEY (Tipo, Prioridade)
 );
-INSERT INTO #Virt_Parametros (Tipo, Prioridade, MetaRespostaH, MetaResolucaoH, Regime, FatorFAIA, FatorFARC)
+INSERT INTO #Virt_Parametros (Tipo, Prioridade, MetaRespostaH, MetaResolucaoH, Contagem, FatorFAIA, FatorFARC)
 VALUES
-    (N'Incidente',   1,  1.00,  12, N'24x7', 0.4, 0.4),
-    (N'Incidente',   2,  2.00,  24, N'24x7', 0.4, 0.4),
-    (N'Incidente',   3,  4.00,  36, N'TCU',  0.4, 0.2),
-    (N'Incidente',   4,  8.00,  60, N'TCU',  0.4, 0.2),
-    (N'Solicitação', 1,  0.25,  12, N'24x7', 0.4, 0.4),
-    (N'Solicitação', 2,  2.00,  24, N'24x7', 0.4, 0.4),
-    (N'Solicitação', 3,  4.00,  60, N'TCU',  0.4, 0.2),
-    (N'Solicitação', 4,  8.00, 180, N'TCU',  0.4, 0.2),
-    (N'Solicitação', 5, 12.00, 360, N'TCU',  0.4, 0.2);
+    (N'Incidente',   1,  1.00,  12, N'24x7',        0.4, 0.4),
+    (N'Incidente',   2,  2.00,  24, N'24x7',        0.4, 0.4),
+    (N'Incidente',   3,  4.00,  36, N'Horário TCU', 0.4, 0.2),
+    (N'Incidente',   4,  8.00,  60, N'Horário TCU', 0.4, 0.2),
+    (N'Solicitação', 1,  0.25,  12, N'24x7',        0.4, 0.4),
+    (N'Solicitação', 2,  2.00,  24, N'24x7',        0.4, 0.4),
+    (N'Solicitação', 3,  4.00,  60, N'Horário TCU', 0.4, 0.2),
+    (N'Solicitação', 4,  8.00, 180, N'Horário TCU', 0.4, 0.2),
+    (N'Solicitação', 5, 12.00, 360, N'Horário TCU', 0.4, 0.2);
 
 --------------------------------------------------------------------------------
--- [2] Feriados e pontos facultativos do regime Comercial (antigo TCU): datas
---     sem horario comercial.
+-- [2] Feriados e pontos facultativos: datas fora do Horario TCU (dias nao
+--     uteis).
 --
 -- A lista de feriados NAO fica mais neste arquivo. Ela vem do arquivo de
 -- feriados (config/feriados.csv; no Power BI, a copia no SharePoint), o mesmo
@@ -627,7 +637,7 @@ GROUP BY x.id;
 CREATE UNIQUE CLUSTERED INDEX IX_Virt_Encerramento ON #Virt_Encerramento (id);
 
 --------------------------------------------------------------------------------
--- [7] Marcos em horario do Brasil, regime e parametros.
+-- [7] Marcos em horario do Brasil, Contagem e parametros.
 --------------------------------------------------------------------------------
 IF OBJECT_ID('tempdb..#Virt_Marco') IS NOT NULL DROP TABLE #Virt_Marco;
 SELECT
@@ -643,7 +653,7 @@ SELECT
     c.group_id,
     c.tipo,
     c.prioridade,
-    pr.Regime AS regime,
+    pr.Contagem AS contagem,
     DATEADD(HOUR, -@HorasBrasilParaUTC, DATEADD(SECOND, c.abertura_epoch,   @Epoch)) AS abertura,
     DATEADD(HOUR, -@HorasBrasilParaUTC, DATEADD(SECOND, c.entrada_epoch,    @Epoch)) AS entrada,
     DATEADD(HOUR, -@HorasBrasilParaUTC, DATEADD(SECOND, c.inicio_epoch,     @Epoch)) AS inicio,
@@ -664,9 +674,9 @@ LEFT JOIN #Virt_Encerramento AS enc
 CREATE UNIQUE CLUSTERED INDEX IX_Virt_Marco ON #Virt_Marco (id);
 
 --------------------------------------------------------------------------------
--- [8] Dias com horario comercial (segunda a sexta, fora dos feriados e
---     pontos facultativos do bloco [2]), cobrindo de abertura ate o ultimo
---     marco.
+-- [8] Dias uteis do Horario TCU (segunda a sexta, fora dos feriados e
+--     pontos facultativos do bloco [2]), com a janela das 8h as 20h, cobrindo
+--     da abertura ate o ultimo marco (Anexo VII 3.1.13).
 --------------------------------------------------------------------------------
 DECLARE @DiaMin date = (SELECT MIN(CONVERT(date, abertura)) FROM #Virt_Marco);
 DECLARE @DiaMax date = (SELECT MAX(CONVERT(date, CASE WHEN resolucao > inicio OR inicio IS NULL THEN resolucao ELSE inicio END)) FROM #Virt_Marco);
@@ -696,23 +706,30 @@ WHERE DATEDIFF(DAY, '19000101', d.Dia) % 7 < 5
   AND NOT EXISTS (SELECT 1 FROM #Virt_FeriadoAnual AS k WHERE k.MesDia = RIGHT(CONVERT(char(10), d.Dia, 23), 5));
 
 --------------------------------------------------------------------------------
--- [9] Status ativos e trechos ate os marcos.
---     Linha do tempo de status do chamado: na abertura vale a origem do
---     primeiro evento de status (sem evento, 'Aberto, aguarda atendimento'); cada
---     evento de status (ST, RE, RO, CL...) passa a valer o status de destino ate
---     o proximo, em ordem de system_time e act_log.id. Um SOLN e uma entrada
---     implicita em status nao ativo, como na Decision. Ativos: 'Em andamento'
---     (FIP), 'Aberto, aguarda atendimento' (OP) e 'Reaberto' (REAB; orientacao
---     do gerente de 2026-10-06: a reabertura corrige um encerramento indevido e
---     o tempo conta). Os demais (Aguarda atendimento, Agendado, Em
---     homologacao...) pausam o Tempo de Atendimento.
+-- [9] Linha do tempo de status e trechos ate os marcos.
+--     Na abertura vale a origem do primeiro evento de status (sem evento,
+--     'Aberto, aguarda atendimento'); cada evento de status (ST, RE, RO, CL...)
+--     passa a valer o status de destino ate o proximo, em ordem de system_time
+--     e act_log.id. O SOLN nao grava destino e nao muda a linha.
+--     Classe de cada trecho de status:
+--       H = homologacao: 'Em homologacao' (EMHOM) e 'Em homologacao pelo
+--           fiscal' (CQ). Nao conta no Tsol (Anexo VII 3.1.8). No SDM o T2
+--           (resolve_date) e a entrada em 'Em homologacao'; antes do T2 so ha
+--           homologacao quando a solucao foi recusada e o chamado voltou ao
+--           atendimento.
+--       A = 'Agendado' (AGENDADO): conta no Tsol. A suspensao por agendamento
+--           depende de acordo previo com o TCU (3.4.4, 3.6.1.2), que o SDM nao
+--           registra; o tempo sai na coluna informativa Tempo Agendado.
+--       C = qualquer outro status: conta. O contrato nao suspende a contagem
+--           por status ('Aguarda atendimento', 'Reaberto', esperas...); a
+--           interrupcao e a criterio do TCU (3.6.1).
 --------------------------------------------------------------------------------
 IF OBJECT_ID('tempdb..#Virt_StatusLinha') IS NOT NULL DROP TABLE #Virt_StatusLinha;
 SELECT
     c.id,
     c.abertura_epoch AS momento,
     0 AS ordem,
-    CASE WHEN pe.code_de IS NULL OR pe.code_de IN ('FIP', 'OP', 'REAB') THEN 1 ELSE 0 END AS ativo
+    ISNULL(pe.code_de, 'OP') AS code
 INTO #Virt_StatusLinha
 FROM #Virt_Chamado AS c
 OUTER APPLY (
@@ -729,34 +746,38 @@ SELECT
     l.id,
     l.system_time,
     l.log_id,
-    CASE WHEN sd.code IN ('FIP', 'OP', 'REAB') THEN 1 ELSE 0 END
+    sd.code
 FROM #Virt_Log AS l
 JOIN #Virt_Chamado AS c
     ON c.id = l.id
 LEFT JOIN dbo.cr_stat AS sd
     ON sd.sym = l.status_para COLLATE DATABASE_DEFAULT
-WHERE l.status_para IS NOT NULL
-   OR l.[type] = 'SOLN'; -- SOLN: sem destino gravado, fica nao ativo
+WHERE l.status_para IS NOT NULL;
 
-IF OBJECT_ID('tempdb..#Virt_StatusAtivo') IS NOT NULL DROP TABLE #Virt_StatusAtivo;
+IF OBJECT_ID('tempdb..#Virt_StatusTrecho') IS NOT NULL DROP TABLE #Virt_StatusTrecho;
 SELECT
     x.id,
+    CASE WHEN x.code IN ('EMHOM', 'CQ') THEN 'H' -- Em homologacao / pelo fiscal
+         WHEN x.code = 'AGENDADO'       THEN 'A' -- Agendado
+         ELSE 'C' END AS classe,
     DATEADD(HOUR, -@HorasBrasilParaUTC, DATEADD(SECOND, x.momento, @Epoch)) AS ini,
-    DATEADD(HOUR, -@HorasBrasilParaUTC, DATEADD(SECOND, x.proximo, @Epoch)) AS fim -- NULL = ainda ativo
-INTO #Virt_StatusAtivo
+    DATEADD(HOUR, -@HorasBrasilParaUTC, DATEADD(SECOND, x.proximo, @Epoch)) AS fim -- NULL = status vigente no ultimo evento lido
+INTO #Virt_StatusTrecho
 FROM (
     SELECT
-        s.id, s.momento, s.ordem, s.ativo,
+        s.id, s.momento, s.ordem, s.code,
         LEAD(s.momento) OVER (PARTITION BY s.id ORDER BY s.momento, s.ordem) AS proximo
     FROM #Virt_StatusLinha AS s
 ) AS x
-WHERE x.ativo = 1
-  AND (x.proximo IS NULL OR x.proximo > x.momento);
-CREATE CLUSTERED INDEX IX_Virt_StatusAtivo ON #Virt_StatusAtivo (id, ini);
+WHERE x.proximo IS NULL OR x.proximo > x.momento;
+CREATE CLUSTERED INDEX IX_Virt_StatusTrecho ON #Virt_StatusTrecho (id, ini);
 
--- Trechos de posse ate o marco: R = ate o Inicio (resposta); T = ate a
--- Resolucao (posse total, base do Tempo suspenso); S = ate a Resolucao e so em
--- status ativo (Tempo de Atendimento).
+-- Trechos ate o marco:
+--   R = posse ate o Inicio (Tini, congelado);
+--   T = posse ate a Resolucao (base do Tempo Fora Grupo Virtual);
+--   S = de T0 ate a Resolucao, em status que contam (C e A): Tsol;
+--   H = de T0 ate a Resolucao, em homologacao: Tempo Parada Contagem NMS;
+--   A = de T0 ate a Resolucao, em Agendado: Tempo Agendado (contido no S).
 IF OBJECT_ID('tempdb..#Virt_Trecho') IS NOT NULL DROP TABLE #Virt_Trecho;
 SELECT
     j.id,
@@ -773,49 +794,58 @@ WHERE k.marco IS NOT NULL
 
 INSERT INTO #Virt_Trecho (id, medida, a, b)
 SELECT
-    j.id,
-    'S',
+    s.id,
+    k.medida,
     lim.a,
     lim.b
-FROM #Virt_Janela AS j
+FROM #Virt_StatusTrecho AS s
 JOIN #Virt_Marco AS m
-    ON m.id = j.id
-JOIN #Virt_StatusAtivo AS sa
-    ON sa.id = j.id
+    ON m.id = s.id
 CROSS APPLY (
     SELECT
-        a = (SELECT MAX(v) FROM (VALUES (j.ini), (sa.ini)) AS x (v)),
-        b = (SELECT MIN(v) FROM (VALUES (j.fim), (sa.fim), (m.resolucao)) AS x (v))
+        a = CASE WHEN s.ini > m.abertura THEN s.ini ELSE m.abertura END,
+        b = CASE WHEN s.fim IS NULL OR s.fim > m.resolucao THEN m.resolucao ELSE s.fim END
 ) AS lim
+CROSS APPLY (
+    SELECT 'S' WHERE s.classe IN ('C', 'A')
+    UNION ALL
+    SELECT 'H' WHERE s.classe = 'H'
+    UNION ALL
+    SELECT 'A' WHERE s.classe = 'A'
+) AS k (medida)
 WHERE m.resolucao IS NOT NULL
   AND lim.a < lim.b;
 CREATE CLUSTERED INDEX IX_Virt_Trecho ON #Virt_Trecho (id, medida);
 
 --------------------------------------------------------------------------------
--- [10] Tempos em segundos, somados sobre os trechos. Tini = posse ate o
---      Inicio; Tsol = posse em status ativo ate a Resolucao; posse total ate a
---      Resolucao para o Tempo suspenso. As horas comerciais so existem no
---      regime TCU. No 24x7 todo o tempo fica no bloco nao comercial e o excesso
---      e medido sobre o corrido.
+-- [10] Tempos em segundos, somados sobre os trechos.
+--      Tini = posse ate o Inicio (congelado). Tsol = de T0 ate a Resolucao,
+--      sem homologacao. Tempo Parada Contagem NMS = homologacao ate a
+--      Resolucao (Tsol + parada = Resolucao - T0). Tempo Agendado = Agendado
+--      ate a Resolucao (ja contado no Tsol). Tempo Fora Grupo Virtual = de T0
+--      ate a Resolucao, fora das janelas de posse (ja contado no Tsol).
+--      Horas Horario TCU = parte do Tini e do Tsol dentro do Horario TCU, nas
+--      duas Contagens; o excesso so usa essas horas na Contagem Horario TCU.
 --------------------------------------------------------------------------------
 IF OBJECT_ID('tempdb..#Virt_Tempo') IS NOT NULL DROP TABLE #Virt_Tempo;
 SELECT
     m.id,
     CASE WHEN m.inicio IS NULL THEN NULL ELSE ISNULL(cor.resp, 0) END AS tini_s,
     CASE WHEN m.resolucao IS NULL THEN NULL ELSE ISNULL(cor.sol, 0) END AS tsol_s,
-    CASE WHEN m.resolucao IS NULL THEN NULL ELSE ISNULL(cor.posse, 0) END AS posse_sol_s,
-    CASE WHEN m.inicio IS NULL THEN NULL
-         WHEN m.regime = N'24x7' THEN 0
-         ELSE ISNULL(com.resp, 0) END AS com_resp_s,
+    CASE WHEN m.resolucao IS NULL THEN NULL ELSE ISNULL(cor.homol, 0) END AS parada_s,
+    CASE WHEN m.resolucao IS NULL THEN NULL ELSE ISNULL(cor.agend, 0) END AS agendado_s,
     CASE WHEN m.resolucao IS NULL THEN NULL
-         WHEN m.regime = N'24x7' THEN 0
-         ELSE ISNULL(com.sol, 0) END AS com_sol_s
+         ELSE DATEDIFF_BIG(SECOND, m.abertura, m.resolucao) - ISNULL(cor.posse, 0) END AS fora_s,
+    CASE WHEN m.inicio IS NULL THEN NULL ELSE ISNULL(com.resp, 0) END AS com_resp_s,
+    CASE WHEN m.resolucao IS NULL THEN NULL ELSE ISNULL(com.sol, 0) END AS com_sol_s
 INTO #Virt_Tempo
 FROM #Virt_Marco AS m
 OUTER APPLY (
     SELECT
         SUM(CASE WHEN t.medida = 'R' THEN DATEDIFF_BIG(SECOND, t.a, t.b) END) AS resp,
         SUM(CASE WHEN t.medida = 'S' THEN DATEDIFF_BIG(SECOND, t.a, t.b) END) AS sol,
+        SUM(CASE WHEN t.medida = 'H' THEN DATEDIFF_BIG(SECOND, t.a, t.b) END) AS homol,
+        SUM(CASE WHEN t.medida = 'A' THEN DATEDIFF_BIG(SECOND, t.a, t.b) END) AS agend,
         SUM(CASE WHEN t.medida = 'T' THEN DATEDIFF_BIG(SECOND, t.a, t.b) END) AS posse
     FROM #Virt_Trecho AS t
     WHERE t.id = m.id
@@ -836,14 +866,18 @@ OUTER APPLY (
            AND t.b > u.InicioCom
            AND t.a < u.FimCom
         WHERE t.id = m.id
+          AND t.medida IN ('R', 'S')
     ) AS d
 ) AS com;
 CREATE UNIQUE CLUSTERED INDEX IX_Virt_Tempo ON #Virt_Tempo (id);
 
 --------------------------------------------------------------------------------
--- [11] Calculo numerico, em segundos. Excesso: TCU sobre horas comerciais,
---      24x7 sobre tempo corrido. Indice = horas de excesso (arredondadas em
---      6 casas) x fator.
+-- [11] Calculo numerico, em segundos. Excesso por chamado = Max(T | Meta) -
+--      Meta (Anexo VII, Equacoes 1 e 4): Contagem Horario TCU sobre as horas
+--      dentro do Horario TCU; 24x7 sobre o tempo corrido. Indice = horas de
+--      excesso (6 casas) x fator (Equacoes 2 e 5), em pontos percentuais. O
+--      somatorio por item, tipo e prioridade e o arredondamento do somatorio em
+--      duas casas (1.3.1, 1.3.2) sao feitos na consolidacao, fora desta consulta.
 --------------------------------------------------------------------------------
 IF OBJECT_ID('tempdb..#Virt_Calculo') IS NOT NULL DROP TABLE #Virt_Calculo;
 SELECT
@@ -858,9 +892,9 @@ SELECT
     mt.meta_sol_s,
     x.exc_resp_s,
     x.exc_sol_s,
-    -- Tempo suspenso: tempo de posse ate a Resolucao em status nao ativo
-    -- (corrido). Tsol + Tempo suspenso = posse total ate a Resolucao.
-    t.posse_sol_s - t.tsol_s AS suspenso_s,
+    t.parada_s,
+    t.agendado_s,
+    t.fora_s,
     CONVERT(decimal(18,6), CONVERT(decimal(18,6), x.exc_sol_s  / 3600.0000000000) * m.FatorFARC) AS indice_farc,
     CONVERT(decimal(18,6), CONVERT(decimal(18,6), x.exc_resp_s / 3600.0000000000) * m.FatorFAIA) AS indice_faia
 INTO #Virt_Calculo
@@ -874,8 +908,8 @@ CROSS APPLY (
 ) AS mt
 CROSS APPLY (
     SELECT
-        base_resp = CASE WHEN m.regime = N'24x7' THEN t.tini_s ELSE t.com_resp_s END,
-        base_sol  = CASE WHEN m.regime = N'24x7' THEN t.tsol_s ELSE t.com_sol_s  END
+        base_resp = CASE WHEN m.contagem = N'24x7' THEN t.tini_s ELSE t.com_resp_s END,
+        base_sol  = CASE WHEN m.contagem = N'24x7' THEN t.tsol_s ELSE t.com_sol_s  END
 ) AS b
 CROSS APPLY (
     SELECT
@@ -890,15 +924,13 @@ CREATE UNIQUE CLUSTERED INDEX IX_Virt_Calculo ON #Virt_Calculo (id);
 
 --------------------------------------------------------------------------------
 -- [12] Linhas finais.
---      Bloco A: identificacao e datas. Bloco B: as 15 colunas de apuracao da
---      Virtual. Bloco C: colunas de contexto no padrao da Decision.
---      [Resumo], [Severidade] e [Tipo SLA] seguem a Decision: Resumo =
---      call_req.summary; Severidade = rotulo da prioridade ('3 - Média'), como
---      a coluna Severidade da Decision; Tipo SLA = regime do bloco [1] (24x7 =
---      Corrida, TCU = Comercial; sem regra de SLA = N/A). [chave] mantem o
---      codigo interno do regime (24x7/TCU).
---      As duracoes saem como texto [h]:mm:ss (horas acima de 24 sem virar o
---      dia). A formatacao e feita so aqui, depois do
+--      Bloco A: identificacao e datas. Bloco B: as colunas de apuracao. Bloco
+--      C: colunas de contexto. Nomes na terminologia do Anexo VII:
+--      [Prioridade] = numero 1 a 5 do SDM (Tabela 4; a prioridade 5 nao tem
+--      rotulo no contrato); [Contagem] = '24x7' ou 'Horário TCU' (a
+--      "Cobertura" da Tabela 1; sem parametro = N/A); [chave] = Tipo |
+--      Prioridade | Contagem. As duracoes saem como texto [h]:mm:ss (horas
+--      acima de 24 sem virar o dia). A formatacao e feita so aqui, depois do
 --      calculo; fatores e indices continuam numericos.
 --------------------------------------------------------------------------------
 IF OBJECT_ID('tempdb..#Virt_Saida') IS NOT NULL DROP TABLE #Virt_Saida;
@@ -907,19 +939,8 @@ SELECT
     m.ref_num AS [ID Chamado],
     m.resumo AS [Resumo],
     m.tipo AS [Tipo (Incidente/Solicitação)],
-    CASE m.prioridade
-        WHEN 1 THEN N'1 - Máxima'
-        WHEN 2 THEN N'2 - Alta'
-        WHEN 3 THEN N'3 - Média'
-        WHEN 4 THEN N'4 - Baixa'
-        WHEN 5 THEN N'5 - Mínima'
-        ELSE N'NãoInformada'
-    END AS [Severidade],
-    CASE m.regime
-        WHEN N'24x7' THEN N'Corrida'
-        WHEN N'TCU'  THEN N'Comercial'
-        ELSE N'N/A'
-    END AS [Tipo SLA],
+    m.prioridade AS [Prioridade],
+    ISNULL(m.contagem, N'N/A') AS [Contagem],
     m.abertura AS [Data/Hora Abertura],
     m.inicio AS [Data/Hora Início Atendimento],
     m.resolucao AS [Data/Hora Resolução],
@@ -927,15 +948,15 @@ SELECT
     -- Bloco B
     f.tini AS [Tini (h)],
     f.tsol AS [Tsol (h)],
-    f.com_resp AS [Horas Comerciais Resposta (h)],
-    f.ncom_resp AS [Horas Não Comerciais Resposta (h)],
-    f.com_sol AS [Horas Comerciais Resolução (h)],
-    f.ncom_sol AS [Horas Não Comerciais Resolução (h)],
+    f.com_resp AS [Horas Horário TCU Resposta (h)],
+    f.ncom_resp AS [Horas Fora Horário TCU Resposta (h)],
+    f.com_sol AS [Horas Horário TCU Resolução (h)],
+    f.ncom_sol AS [Horas Fora Horário TCU Resolução (h)],
     f.meta_resp AS [Meta Resposta (h)],
     f.meta_sol AS [Meta Resolução (h)],
     f.exc_resp AS [Excesso Resposta (h)],
     f.exc_sol AS [Excesso Resolução (h)],
-    CONCAT(m.tipo, N'|', m.prioridade, N'|', m.regime) AS [chave],
+    CONCAT(m.tipo, N'|', m.prioridade, N'|', m.contagem) AS [chave],
     m.FatorFARC AS [Fator FARC],
     c.indice_farc AS [Indice FARC],
     m.FatorFAIA AS [Fator FAIA],
@@ -961,7 +982,13 @@ SELECT
     )) AS [Responsável Atendimento],
     ic.resource_name AS [Item de Configuração],
     m.entrada AS [Data Entrada Grupo Virtual],
-    f.suspenso AS [Tempo suspenso],
+    -- Anexo VII 6.19.13: tempo total de parada de contagem de NMS (aqui, so a
+    -- homologacao antes da Resolucao). Tempo Agendado e Tempo Fora Grupo
+    -- Virtual sao informativos: ja estao no Tsol e so saem dele se o TCU
+    -- reconhecer a suspensao (3.6.1).
+    f.parada AS [Tempo Parada Contagem NMS (h)],
+    f.agendado AS [Tempo Agendado (h)],
+    f.fora AS [Tempo Fora Grupo Virtual (h)],
     CASE WHEN c.exc_resp_s IS NULL THEN N'N/A'
          WHEN c.exc_resp_s > 0 THEN N'Não Atende'
          ELSE N'Atende' END AS [Meta Primeiro Atendimento],
@@ -980,7 +1007,7 @@ SELECT
     N'-' AS [Justificativa],
     CASE WHEN c.exc_sol_s IS NULL THEN N'N/A'
          WHEN c.exc_sol_s > 0 THEN N'Não Atende'
-         ELSE N'Atende' END AS [Meta Atendimento],
+         ELSE N'Atende' END AS [Situação Meta Resolução],
     -- Grupo no instante de referencia, pela linha do tempo de transferencias:
     -- FECHAMENTO = grupo no fechamento (o mesmo que decide o escopo em [5]);
     -- RESOLUCAO = grupo no instante da resolucao (ultima transferencia de grupo
@@ -1059,30 +1086,32 @@ CROSS APPLY (
         meta_sol  = CASE WHEN c.meta_sol_s  IS NULL THEN NULL ELSE CONCAT(c.meta_sol_s  / 3600, N':', RIGHT(CONCAT(N'0', c.meta_sol_s  % 3600 / 60), 2), N':', RIGHT(CONCAT(N'0', c.meta_sol_s  % 60), 2)) END,
         exc_resp  = CASE WHEN c.exc_resp_s  IS NULL THEN NULL ELSE CONCAT(c.exc_resp_s  / 3600, N':', RIGHT(CONCAT(N'0', c.exc_resp_s  % 3600 / 60), 2), N':', RIGHT(CONCAT(N'0', c.exc_resp_s  % 60), 2)) END,
         exc_sol   = CASE WHEN c.exc_sol_s   IS NULL THEN NULL ELSE CONCAT(c.exc_sol_s   / 3600, N':', RIGHT(CONCAT(N'0', c.exc_sol_s   % 3600 / 60), 2), N':', RIGHT(CONCAT(N'0', c.exc_sol_s   % 60), 2)) END,
-        suspenso  = CASE WHEN c.suspenso_s  IS NULL THEN NULL ELSE CONCAT(c.suspenso_s  / 3600, N':', RIGHT(CONCAT(N'0', c.suspenso_s  % 3600 / 60), 2), N':', RIGHT(CONCAT(N'0', c.suspenso_s  % 60), 2)) END
+        parada    = CASE WHEN c.parada_s    IS NULL THEN NULL ELSE CONCAT(c.parada_s    / 3600, N':', RIGHT(CONCAT(N'0', c.parada_s    % 3600 / 60), 2), N':', RIGHT(CONCAT(N'0', c.parada_s    % 60), 2)) END,
+        agendado  = CASE WHEN c.agendado_s  IS NULL THEN NULL ELSE CONCAT(c.agendado_s  / 3600, N':', RIGHT(CONCAT(N'0', c.agendado_s  % 3600 / 60), 2), N':', RIGHT(CONCAT(N'0', c.agendado_s  % 60), 2)) END,
+        fora      = CASE WHEN c.fora_s      IS NULL THEN NULL ELSE CONCAT(c.fora_s      / 3600, N':', RIGHT(CONCAT(N'0', c.fora_s      % 3600 / 60), 2), N':', RIGHT(CONCAT(N'0', c.fora_s      % 60), 2)) END
 ) AS f;
 
 -- <<< MOTOR VIRTUAL ------------------------------------------------------------
 
 --------------------------------------------------------------------------------
--- Resultado unico: Comercial e Corrida juntos; [Tipo SLA] separa os regimes.
+-- Resultado unico: Horario TCU e 24x7 juntos; [Contagem] separa.
 --------------------------------------------------------------------------------
 SELECT
     [ID Chamado],
     [Resumo],
     [Tipo (Incidente/Solicitação)],
-    [Severidade],
-    [Tipo SLA],
+    [Prioridade],
+    [Contagem],
     [Data/Hora Abertura],
     [Data/Hora Início Atendimento],
     [Data/Hora Resolução],
     [Data/Hora Fechamento],
     [Tini (h)],
     [Tsol (h)],
-    [Horas Comerciais Resposta (h)],
-    [Horas Não Comerciais Resposta (h)],
-    [Horas Comerciais Resolução (h)],
-    [Horas Não Comerciais Resolução (h)],
+    [Horas Horário TCU Resposta (h)],
+    [Horas Fora Horário TCU Resposta (h)],
+    [Horas Horário TCU Resolução (h)],
+    [Horas Fora Horário TCU Resolução (h)],
     [Meta Resposta (h)],
     [Meta Resolução (h)],
     [Excesso Resposta (h)],
@@ -1098,13 +1127,15 @@ SELECT
     [Responsável Atendimento],
     [Item de Configuração],
     [Data Entrada Grupo Virtual],
-    [Tempo suspenso],
+    [Tempo Parada Contagem NMS (h)],
+    [Tempo Agendado (h)],
+    [Tempo Fora Grupo Virtual (h)],
     [Meta Primeiro Atendimento],
     [Indicador Reabertura],
     [Acordo Prazo],
     [Acordo Qualidade],
     [Justificativa],
-    [Meta Atendimento],
+    [Situação Meta Resolução],
     [Grupo],
     [Indicador de Agendamento],
     [Data de Encerramento Virtual]
