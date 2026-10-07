@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<!-- Documentacao do painel FAIA/FARC da Virtual TI (visual HTML Content e leitura local).
+Fonte detalhada: powerbi/powerbi-query.md e docs/virtual-calculation.md. Em caso de divergencia, valem elas.
+Autocontido: sem CDN, sem arquivos externos, CSS embutido. Sem aspas duplas: pode ser colado dentro de uma medida DAX. -->
+<html lang='pt-BR'>
+<head>
+<meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'>
+<title>Painel FAIA e FARC — Virtual TI</title>
+<style>
+body{margin:0;background:#ffffff;color:#1f2328;font-family:Segoe UI,Arial,sans-serif;font-size:13px;line-height:1.5}
+.pagina{max-width:920px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:0 0 4px 0;color:#0b3d6b}
+h2{font-size:16px;color:#0b3d6b;border-bottom:1px solid #d0d7de;padding-bottom:4px;margin-top:22px}
+.sub{margin:0 0 12px 0;color:#57606a}
+.nota{background:#eef5fc;border-left:4px solid #0b5cad;padding:10px 12px;margin:0 0 14px 0}
+.alerta{background:#fff8c5;border-left:4px solid #bf8700;padding:10px 12px;margin:8px 0 14px 0}
+.ok{background:#eaf6ec;border-left:4px solid #1a7f37;padding:10px 12px;margin:8px 0 14px 0}
+table{border-collapse:collapse;width:100%;margin:6px 0 10px 0}
+th,td{text-align:left;border:1px solid #d0d7de;padding:4px 6px;vertical-align:top}
+th{background:#f6f8fa}
+code{font-family:Consolas,monospace;background:#f6f8fa;padding:0 3px;border-radius:3px}
+pre{font-family:Consolas,monospace;background:#f6f8fa;padding:8px 10px;overflow-x:auto;border-radius:4px}
+.rodape{margin-top:18px;color:#57606a;font-size:12px}
+</style>
+</head>
+<body>
+<div class='pagina'>
+
+<h1>Painel FAIA e FARC — Virtual TI</h1>
+<p class='sub'>Como a fonte de dados deste painel funciona e como mantê-la. Atualizado em 07/10/2026.</p>
+
+<div class='nota'><b>Em uma linha:</b> o painel mostra os chamados atendidos pela Virtual TI (no SDM, grupo <code>Fornecedores - Virtual</code>) dos últimos 12 meses até hoje, um por linha, com o tempo do primeiro atendimento, o tempo de atendimento, as metas do contrato e os índices FAIA e FARC.</div>
+
+<h2>1. Objetivo da consulta</h2>
+<p>Apurar, chamado a chamado, os indicadores de nível mínimo de serviço do contrato da Virtual TI:</p>
+<ul>
+<li><b>FAIA</b> (Fator de Abatimento por Atraso no Início de Atendimento): quanto o primeiro atendimento passou da meta.</li>
+<li><b>FARC</b> (Fator de Abatimento por Atraso na Resolução dos Chamados): quanto o tempo de atendimento passou da meta de resolução.</li>
+</ul>
+<p>Os índices saem em <b>pontos percentuais</b>, por chamado. O total de um mês é a soma da coluna Indice FAIA ou Indice FARC no período.</p>
+
+<h2>2. Origem dos dados</h2>
+<p>Base <b>mdb</b> do CA Service Desk Manager, lida <b>somente para leitura</b> (a consulta cria apenas tabelas temporárias). O SQL roda no SQL Server; o Power BI envia o texto da consulta com a lista de feriados lida do SharePoint e importa o resultado.</p>
+<table>
+<tr><th>Tabela do SDM</th><th>Papel</th></tr>
+<tr><td>call_req</td><td>O chamado: tipo, prioridade, status, categoria, resumo, abertura, resolução, fechamento</td></tr>
+<tr><td>act_log</td><td>Histórico: transferências de grupo e mudanças de status. De onde saem a posse e os tempos</td></tr>
+<tr><td>cr_stat, prob_ctg</td><td>Nomes de status e de categoria</td></tr>
+<tr><td>ca_contact, ca_owned_resource</td><td>Pessoas, grupos e itens de configuração</td></tr>
+</table>
+<p>Metas, fatores, prioridades e Contagem vêm do <b>Edital PE 90028/2025, Anexo VII</b> (Níveis Mínimos de Serviço). Fonte oficial do pacote de Edital e anexos: <a href='https://comprasnet.gov.br/ConsultaLicitacoes/download/download_editais_detalhe.asp?coduasg=30001&amp;modprp=5&amp;numprp=900282025'>Comprasnet — PE 90028/2025</a>.</p>
+
+<h2>3. Estrutura geral</h2>
+<table>
+<tr><th>Arquivo (repositório Extracao_de_dados_Virtual)</th><th>Papel</th></tr>
+<tr><td>powerbi/consulta_virtual_ti_power_bi.m</td><td><b>A consulta do Power BI</b> (a única). Power Query M: lê o feriados.txt no SharePoint, valida, envia a lista ao SQL e executa a consulta</td></tr>
+<tr><td>queries/consulta_virtual_ti_faia_farc.sql</td><td>Consulta de referência e fonte do .m. Usada para testes; não se cola no Power BI</td></tr>
+<tr><td>docs/feriados.txt</td><td>Calendário de feriados e pontos facultativos (cópia versionada do arquivo do SharePoint)</td></tr>
+<tr><td>tools/gerar_powerbi_m.ps1</td><td>Gera o .m a partir da referência; só o período muda</td></tr>
+</table>
+<pre>queries/consulta_virtual_ti_faia_farc.sql  (referência)
+        |  tools/gerar_powerbi_m.ps1
+        v
+powerbi/consulta_virtual_ti_power_bi.m     (Power BI: últimos 12 meses + feriados do SharePoint)</pre>
+
+<h2>4. Como atualizar no Power BI</h2>
+<ol>
+<li>Primeira vez: <i>Página Inicial → Nova Fonte → Consulta Nula → Editor Avançado</i> e colar o arquivo <b>consulta_virtual_ti_power_bi.m</b> inteiro.</li>
+<li>Preencher <b>SharePointFeriadosUrl</b> (seção 6).</li>
+<li>Privacidade: SharePoint e SQL Server como <b>Organizacional</b>. Credenciais: SQL Server como hoje; SharePoint com conta organizacional. No gateway, permitir fontes de nuvem.</li>
+<li>Depois disso, basta <b>Atualizar</b>. A janela (últimos 12 meses completos + mês corrente, pela data de fechamento) anda sozinha.</li>
+<li>Mudança de regra: alterar a consulta de referência, gerar o .m de novo e colar no Editor Avançado. Mudança de feriado: só o arquivo no SharePoint.</li>
+</ol>
+
+<h2>5. Como funciona o calendário</h2>
+<ul>
+<li>O arquivo usado é o <b>feriados.txt</b>: no SharePoint para o painel; a cópia versionada é docs/feriados.txt. É o mesmo calendário do TCU para Virtual TI, Decision e A2B.</li>
+<li>Três seções: <b>Feriados Fixos</b> (formato DD-MM, valem todo ano), <b>Feriados móveis/diferenciados</b> e <b>Pontos Facultativos</b> (formato DD-MM-AAAA, valem só naquele ano). Uma data por linha.</li>
+<li>Uma data cadastrada fica inteira fora do Horário TCU. Sábado e domingo nunca estão no Horário TCU.</li>
+<li>Para incluir uma data: editar o feriados.txt no SharePoint e salvar. A próxima atualização já usa a lista nova, sem mudar o SQL.</li>
+<li>Data inválida, repetida, fora do formato ou fora da seção certa <b>interrompe a atualização</b> com a linha do problema. O painel nunca é calculado sem feriados.</li>
+</ul>
+
+<h2>6. Link do SharePoint</h2>
+<p>Para trocar o endereço do SharePoint, altere apenas <b>SharePointFeriadosUrl</b>. Fica logo no início do .m, no bloco CONFIGURACAO - SHAREPOINT; o endereço não aparece em nenhum outro lugar da consulta:</p>
+<pre>SharePointFeriadosUrl = &#39;link direto do feriados.txt&#39;   (no .m, entre aspas duplas)</pre>
+<div class='alerta'><b>Pendente:</b> o link real do feriados.txt no SharePoint ainda não foi registrado. O .m traz o marcador INSERIR_URL_DO_ARQUIVO_FERIADOS_NO_SHAREPOINT; enquanto ele estiver lá, a atualização falha pedindo o link. Use o link <b>direto</b> do arquivo (https://&lt;empresa&gt;.sharepoint.com/sites/&lt;site&gt;/Shared%20Documents/&lt;pasta&gt;/feriados.txt), o mesmo nos três painéis.</div>
+
+<h2>7. Contagem: 24x7 e Horário TCU</h2>
+<table>
+<tr><th>Contagem</th><th>Prioridades</th><th>Janela</th></tr>
+<tr><td>24x7</td><td>P1 e P2</td><td>00:00:00 às 23:59:59, todos os dias, tempo corrido; feriados não interrompem</td></tr>
+<tr><td>Horário TCU</td><td>P3, P4 e P5</td><td>08:00 às 20:00, segunda a sexta, fora dos feriados e pontos facultativos do calendário</td></tr>
+</table>
+<p>No Anexo VII esse conceito se chama <b>Cobertura</b> (Tabela 1). A mesma Contagem vale para o primeiro atendimento e para a resolução.</p>
+
+<h2>8. FAIA e FARC</h2>
+<ul>
+<li><b>FAIA:</b> excesso de resposta = Tempo Primeiro Atendimento − Meta Resposta (se positivo). Índice FAIA = horas de excesso × Fator FAIA.</li>
+<li><b>FARC:</b> excesso de resolução = Tempo de Atendimento − Meta Resolução (se positivo). Índice FARC = horas de excesso × Fator FARC.</li>
+<li>Na Contagem Horário TCU, o tempo comparado com a meta é o das horas dentro do Horário TCU; na 24x7, o tempo corrido.</li>
+<li>Exemplo: 8,065 h de excesso × 0,4 = 3,226 pontos percentuais.</li>
+</ul>
+
+<h2>9. Metas por Tipo e Prioridade</h2>
+<table>
+<tr><th>Tipo</th><th>Prioridade</th><th>Meta Resposta (primeiro atendimento)</th><th>Meta Resolução</th><th>Contagem</th></tr>
+<tr><td>Incidente</td><td>1</td><td>60 min</td><td>12 h</td><td>24x7</td></tr>
+<tr><td>Incidente</td><td>2</td><td>2 h</td><td>24 h</td><td>24x7</td></tr>
+<tr><td>Incidente</td><td>3</td><td>4 h</td><td>36 h</td><td>Horário TCU</td></tr>
+<tr><td>Incidente</td><td>4</td><td>8 h</td><td>60 h</td><td>Horário TCU</td></tr>
+<tr><td>Solicitação</td><td>1</td><td>15 min</td><td>12 h</td><td>24x7</td></tr>
+<tr><td>Solicitação</td><td>2</td><td>2 h</td><td>24 h</td><td>24x7</td></tr>
+<tr><td>Solicitação</td><td>3</td><td>4 h</td><td>60 h</td><td>Horário TCU</td></tr>
+<tr><td>Solicitação</td><td>4</td><td>8 h</td><td>180 h</td><td>Horário TCU</td></tr>
+<tr><td>Solicitação</td><td>5</td><td>12 h</td><td>360 h</td><td>Horário TCU</td></tr>
+</table>
+
+<h2>10. Fatores</h2>
+<table>
+<tr><th>Indicador</th><th>P1</th><th>P2</th><th>P3</th><th>P4</th><th>P5</th></tr>
+<tr><td>FAIA (incidente e solicitação)</td><td>0,4</td><td>0,4</td><td>0,4</td><td>0,4</td><td>0,4</td></tr>
+<tr><td>FARC (incidente e solicitação)</td><td>0,4</td><td>0,4</td><td>0,2</td><td>0,2</td><td>0,2</td></tr>
+</table>
+<p>Em % por hora ou fração de hora excedida (Anexo VII, Tabela 2). P5 só existe para solicitação.</p>
+
+<h2>11. Tempos</h2>
+<ul>
+<li><b>Primeiro Atendimento</b> (coluna Data/Hora Início Atendimento): a primeira vez que a Virtual TI põe o chamado <b>Em andamento</b> enquanto ele está no grupo dela. Sem isso, a primeira atividade registrada na posse; sem atividade, a entrada no grupo.</li>
+<li><b>Tempo Primeiro Atendimento</b> (coluna Tini (h)): o tempo em que o chamado esteve com a Virtual TI até o primeiro atendimento. O tempo em outro grupo não conta.</li>
+<li><b>Tempo de Atendimento</b> (coluna Tsol (h)): o tempo com a Virtual TI até a resolução, só nos status ativos (Em andamento, Aberto aguarda atendimento e Reaberto). Os demais status (Aguarda atendimento, Agendado, solução registrada...) pausam a contagem e vão para Tempo Parada Contagem NMS (h). Saídas do grupo param o relógio; reentradas o religam.</li>
+</ul>
+<p>Esses três tempos seguem a lógica operacional da Decision adaptada à Virtual TI (não a leitura literal dos marcos T0/T1/T2 do Anexo VII). O Tempo de Atendimento <b>não</b> conta desde a abertura do chamado.</p>
+
+<h2>12. Principais colunas</h2>
+<table>
+<tr><th>Coluna</th><th>Significado</th></tr>
+<tr><td>ID Chamado</td><td>Número do chamado no SDM</td></tr>
+<tr><td>Resumo</td><td>Resumo do chamado no SDM (campo summary do registro principal)</td></tr>
+<tr><td>Categoria</td><td>Categoria do chamado no SDM (classificação do registro principal)</td></tr>
+<tr><td>Tipo (Incidente/Solicitação)</td><td>Tipo do chamado</td></tr>
+<tr><td>Prioridade</td><td>Número de 1 a 5</td></tr>
+<tr><td>Contagem</td><td>24x7 ou Horário TCU</td></tr>
+<tr><td>Data/Hora Abertura, Data/Hora Resolução, Data/Hora Fechamento</td><td>Marcos do chamado no SDM (horário do Brasil)</td></tr>
+<tr><td>Data/Hora Início Atendimento</td><td>Primeiro Atendimento</td></tr>
+<tr><td>Tini (h)</td><td>Tempo Primeiro Atendimento</td></tr>
+<tr><td>Tsol (h)</td><td>Tempo de Atendimento</td></tr>
+<tr><td>Horas Horário TCU / Fora Horário TCU (Resposta e Resolução)</td><td>Parte do tempo dentro e fora do Horário TCU</td></tr>
+<tr><td>Meta Resposta (h), Meta Resolução (h)</td><td>Metas da tabela da seção 9</td></tr>
+<tr><td>Excesso Resposta (h), Excesso Resolução (h)</td><td>Quanto passou da meta</td></tr>
+<tr><td>Fator FAIA, Indice FAIA, Fator FARC, Indice FARC</td><td>Fatores e índices em pontos percentuais</td></tr>
+<tr><td>Meta Primeiro Atendimento, Situação Meta Resolução</td><td>Atende ou Não Atende</td></tr>
+<tr><td>Tempo Parada Contagem NMS (h)</td><td>Tempo com a Virtual TI, até a resolução, em status que pausam</td></tr>
+<tr><td>Data Entrada Grupo Virtual TI</td><td>Primeira entrada no grupo da Virtual TI</td></tr>
+<tr><td>Grupo</td><td>Grupo no instante de referência, com o nome do SDM</td></tr>
+<tr><td>Status, Responsável Abertura, Responsável Atendimento, Item de Configuração</td><td>Dados de contexto do chamado</td></tr>
+<tr><td>Indicador Reabertura, Indicador de Agendamento</td><td>Sim ou Não; informativos</td></tr>
+<tr><td>Data de Encerramento Virtual TI</td><td>Último encerramento da atuação da Virtual TI; informativa</td></tr>
+</table>
+<p>As durações saem como texto [h]:mm:ss (ex.: 73:21:56). Os totais vêm das colunas numéricas Indice FAIA e Indice FARC.</p>
+
+<h2>13. Fora do escopo</h2>
+<div class='ok'>A parte <b>financeira por item contratual</b> (itens 2, 3 e 4 do Edital: valor mensal, abatimento, FAIA e FARC financeiros por item) <b>não</b> é calculada por esta consulta. Ela entrega o índice de cada chamado; a aplicação sobre valores do contrato é feita fora dela.</div>
+
+<p class='rodape'>Documentação completa: powerbi/powerbi-query.md e docs/virtual-calculation.md, no repositório Extracao_de_dados_Virtual.</p>
+</div>
+</body>
+</html>
