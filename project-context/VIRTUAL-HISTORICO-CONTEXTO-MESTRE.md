@@ -1123,3 +1123,42 @@ Regressão contra `15dbe62`, mesmo instante (maio/2026 19 chamados;
 Única diferença além dos nomes: as horas dentro/fora do Horário TCU dos
 chamados 24x7 (informativas). SHA256 do motor inalterado:
 `94d0ea4f2de32d46a44024daf120c3b2ece597ba685c421b9f112c7db60b792f`.
+
+### 2026-10-07 — calendário de feriados em TXT (`docs/feriados.txt`)
+
+Mudança só de armazenamento do calendário; nenhuma regra de cálculo mudou.
+`config/feriados.csv` (`Data,Descricao,Fonte`) foi substituído por
+`docs/feriados.txt`: texto simples em seções (`## Regras`,
+`## Feriados Fixos` com `DD-MM`, `## Feriados Por Data`,
+`## Feriados móveis/diferenciados` e `## Pontos Facultativos` com
+`DD-MM-AAAA`), uma data por linha. Gerado por script a partir do CSV, sem
+reconstruir datas: 9 fixos, 2 móveis (Paixão de Cristo 2025 e 2026), 24
+pontos facultativos (classificados pela própria descrição do CSV), nenhum em
+Feriados Por Data. Nomes e Portarias de cada data: parágrafos do arquivo e
+tabela de `docs/feriados.md`, seção 2.
+
+Cópias byte a byte idênticas em `docs/feriados.txt` de Decision, A2B, COI e
+Virtual e em `Documentos e Relatórios/feriados.txt` (pasta fora do Git, só para
+consulta humana); cada repositório lê só a sua cópia.
+
+Leitor (`tools/feriados.ps1`, igual nos três repositórios) e Power Query
+(`tools/gerar_powerbi_m.ps1`) com as mesmas regras: só contam linhas que são
+apenas `DD-MM` ou `DD-MM-AAAA`; data inexistente, linha que parece data fora do
+formato, data repetida, data fora da seção certa, seção desconhecida, arquivo
+ausente, vazio ou fora de UTF-8 interrompem com a linha do problema; data com
+ano que cai em feriado fixo só gera aviso. As datas continuam indo ao SQL em
+`@Feriados` como `MM-DD` / `AAAA-MM-DD`; a `descricao` passou a ser o nome da
+seção. SQL: só a linha de comentário que citava o CSV.
+
+Equivalência: mesmas 35 datas normalizadas (PowerShell = M = CSV antigo); de
+2025-01-01 a 2027-12-31, 53 datas de feriado/ponto facultativo e 357 dias fora
+do Horário TCU antes e depois, 0 perdidas, 0 novas.
+
+Regressão na Virtual (leitor antigo + SQL anterior x leitor novo + SQL atual,
+em sequência): referência maio/2026 (19), 01/2025–10/2026 por fechamento (282)
+e por resolução (293), Power BI 12 meses (282): 0 diferenças em todas as
+colunas, inclusive Primeiro Atendimento, Tempo Primeiro Atendimento, Tempo de
+Atendimento, FAIA e FARC. `.m` regenerado e executado no motor do Power BI
+Desktop (Organizacional + Organizacional, firewall ativo): M = SQL do Power BI
+(282 linhas, 40 colunas). SHA256 do motor (muda só pelo comentário do bloco
+`[2]`): `1943c0bf0c13bb9d06607a469de4820ff29001ba4cc5887044d3fcad5735a2fe`.

@@ -36,7 +36,7 @@ O bloco é **idêntico byte a byte** nos dois arquivos. SHA256 do bloco, com fim
 linha LF:
 
 ```text
-94d0ea4f2de32d46a44024daf120c3b2ece597ba685c421b9f112c7db60b792f
+1943c0bf0c13bb9d06607a469de4820ff29001ba4cc5887044d3fcad5735a2fe
 ```
 
 Ele recebe `@DataInicio`, `@DataFim`, `@DataReferencia` e `@Feriados` (lista
@@ -61,7 +61,7 @@ SharePoint, que o SQL Server não lê. A consulta do relatório é o `.m`:
 1. *Página Inicial → Nova Fonte → Consulta Nula → Editor Avançado*.
 2. Colar `powerbi/consulta_virtual_chamados_power_bi.m` **inteiro**.
 3. Trocar `INSERIR_URL_DO_ARQUIVO_FERIADOS_NO_SHAREPOINT` pelo link direto do
-   `feriados.csv` no SharePoint (o mesmo da Decision e da A2B).
+   `feriados.txt` no SharePoint (o mesmo da Decision e da A2B).
 4. Credenciais: SQL Server como hoje; SharePoint com conta organizacional.
    Privacidade das duas fontes: **Organizacional**. No gateway, permitir fontes
    de nuvem.

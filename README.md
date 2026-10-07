@@ -19,9 +19,9 @@ rastreabilidade está em
 
 Fonte oficial do pacote de Edital e anexos (PE 90028/2025, Comprasnet):
 <https://comprasnet.gov.br/ConsultaLicitacoes/download/download_editais_detalhe.asp?coduasg=30001&modprp=5&numprp=900282025>.
-Os feriados vêm do arquivo de feriados ([`docs/feriados.md`](docs/feriados.md)):
-`config/feriados.csv` nas consultas de `queries/` e o mesmo arquivo no
-SharePoint no Power BI.
+Os feriados vêm do calendário [`docs/feriados.txt`](docs/feriados.txt)
+(explicado em [`docs/feriados.md`](docs/feriados.md)): a cópia do repositório
+nas consultas de `queries/` e o mesmo arquivo no SharePoint no Power BI.
 
 Este repositório atende **somente a Virtual**. Decision, A2B/Protect4 e COI têm
 repositórios próprios.
@@ -37,8 +37,6 @@ repositórios próprios.
 ├── powerbi/
 │   ├── consulta_virtual_chamados_power_bi.sql      SQL do Power BI (Horário TCU e 24x7)
 │   └── consulta_virtual_chamados_power_bi.m        consulta do relatório: feriados do SharePoint + SQL
-├── config/
-│   └── feriados.csv                                feriados e pontos facultativos (cópia versionada)
 ├── tools/
 │   ├── executar_consulta.ps1                       executa queries/ com os feriados do arquivo
 │   ├── gerar_powerbi_m.ps1                         gera powerbi/*.m a partir do .sql
@@ -47,7 +45,8 @@ repositórios próprios.
 ├── docs/
 │   ├── virtual-calculation.md                      regras de cálculo
 │   ├── powerbi-query.md                            consulta do Power BI
-│   └── feriados.md                                 arquivo de feriados (igual nos três repositórios)
+│   ├── feriados.txt                                calendário de feriados e pontos facultativos (igual em todos os repositórios)
+│   └── feriados.md                                 regras, formato e fontes do calendário (igual nos três repositórios)
 ├── project-context/
 │   └── VIRTUAL-HISTORICO-CONTEXTO-MESTRE.md        contexto de manutenção
 ├── support/                                        consultas auxiliares de investigação
@@ -139,7 +138,7 @@ Em resumo:
 A regra completa está em [`docs/virtual-calculation.md`](docs/virtual-calculation.md).
 
 A consulta recebe os feriados pelo parâmetro `@Feriados`, montado a partir de
-`config/feriados.csv` pelo script:
+`docs/feriados.txt` pelo script:
 
 ```powershell
 .\tools\executar_consulta.ps1 -Consulta .\queries\consulta_virtual_faia_farc.sql -Saida C:\temp\virtual
@@ -172,17 +171,20 @@ BI. Detalhes em [`docs/powerbi-query.md`](docs/powerbi-query.md).
 
 ## Feriados
 
-Os feriados e pontos facultativos ficam no **arquivo de feriados**, e não no
-SQL. É um calendário só, o do TCU (Portarias do TCU de cada ano), igual para
-Virtual, Decision e A2B. Para incluir um feriado: editar o `feriados.csv` no
-SharePoint e salvar; a próxima atualização do relatório já usa a lista nova,
-sem mudar o SQL nem republicar. Manter igual o `config/feriados.csv` dos três
-repositórios e conferir com `tools/verificar_feriados.ps1`.
+Os feriados e pontos facultativos ficam no **calendário**
+[`docs/feriados.txt`](docs/feriados.txt), e não no SQL. É um calendário só, o
+do TCU (Portarias do TCU de cada ano), igual para Virtual, Decision e A2B. Para
+incluir um feriado: editar o `feriados.txt` no SharePoint e salvar; a próxima
+atualização do relatório já usa a lista nova, sem mudar o SQL nem republicar.
+Manter igual o `docs/feriados.txt` de todos os repositórios (inclusive o COI)
+e a cópia em `Documentos e Relatórios/feriados.txt`, e conferir com
+`tools/verificar_feriados.ps1`.
 
-Os feriados nacionais fixos (`MM-DD`) valem todo ano automaticamente. A cada
-nova Portaria do TCU, cadastrar só as datas daquele ano (feriados móveis e
-pontos facultativos), com a Portaria na coluna `Fonte`. Formato, passo a passo,
-falhas, Power BI/SharePoint, privacidade e gateway em
+O arquivo é texto simples, em seções: feriados fixos como `DD-MM` (valem todo
+ano), e datas de um ano como `DD-MM-AAAA` (feriados móveis/diferenciados e
+pontos facultativos). A cada nova Portaria do TCU, cadastrar só as datas
+daquele ano, na seção certa, com a Portaria num parágrafo da seção. Formato,
+passo a passo, falhas, Power BI/SharePoint, privacidade e gateway em
 [`docs/feriados.md`](docs/feriados.md).
 
 ## Como validar

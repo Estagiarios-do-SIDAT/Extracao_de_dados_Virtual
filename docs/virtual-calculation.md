@@ -625,7 +625,7 @@ Comprasnet (<https://comprasnet.gov.br/ConsultaLicitacoes/download/download_edit
 | Fatores FAIA e FARC | Anexo VII | Tabela 2 | bloco `[1]`, `FatorFAIA`, `FatorFARC` |
 | Horário TCU: 8h–20h, seg–sex, dias úteis | Anexo VII | 3.1.13 | blocos `[2]` (feriados) e `[8]` (`#Virt_DiaUtil`) |
 | 24x7: 00:00:00–23:59:59, ininterrupto | Anexo VII | 3.1.14 | bloco `[11]`: excesso sobre o tempo corrido |
-| Feriados e pontos facultativos | Portarias do TCU | — | `config/feriados.csv` → `@Feriados`, bloco `[2]` |
+| Feriados e pontos facultativos | Portarias do TCU | — | `docs/feriados.txt` → `@Feriados`, bloco `[2]` |
 | Excesso por chamado | Anexo VII | 1.3.1, 1.3.2, Equações 1 e 4 | bloco `[11]`, `exc_resp_s`, `exc_sol_s` |
 | Índice = excesso × fator | Anexo VII | Equações 2 e 5 | bloco `[11]`, `indice_faia`, `indice_farc` |
 | Colunas do relatório analítico | Anexo VII | 6.19 | mapa da seção 8 |
