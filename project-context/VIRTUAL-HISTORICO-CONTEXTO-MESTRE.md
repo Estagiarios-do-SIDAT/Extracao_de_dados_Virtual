@@ -895,3 +895,43 @@ manual de 12 chamados contra `call_req`, `pri`, `cr_stat`, `prob_ctg` e
 `ca_contact` (P1 1654284 e 1682345, P2 1647146 e 1667617, P3 1645571 e
 1644896, P4 1650824 e 1662379, P5 1647183 e 1655273, reabertura 1660920,
 transferência 1646289): tudo confere. PBI = referência na janela de 12 meses.
+
+### 2026-10-07 — feriados fora do SQL (arquivo de feriados)
+
+Motivo: no ambiente controlado do Power BI, qualquer mudança no SQL do
+relatório exige pedir nova versão à equipe responsável. Com a lista de
+feriados dentro do SQL, um ponto facultativo novo obrigava a republicar. Agora
+a lista fica num arquivo (`config/feriados.csv`; no Power BI, o mesmo arquivo
+no SharePoint), igual para Virtual, Decision e A2B, com a coluna `Escopo` para
+as diferenças entre os projetos. Desenho completo em `docs/feriados.md`.
+
+Arquitetura:
+
+- o SQL Server não lê o SharePoint nem o disco do usuário (a conta não tem
+  `ADMINISTER BULK OPERATIONS`, e *Ad Hoc Distributed Queries* está desligado);
+  os feriados chegam pelo parâmetro `@Feriados` (JSON). O bloco [2] do motor
+  valida e monta `#Virt_Feriado` e `#Virt_FeriadoAnual`; o bloco [8] exclui as
+  duas;
+- Power BI: `powerbi/consulta_virtual_chamados_power_bi.m` lê o CSV do
+  SharePoint, valida, filtra `TODOS`/`VIRTUAL` e chama o SQL por
+  `Value.NativeQuery` com o parâmetro. O `.m` é gerado do `.sql`;
+- `queries/`: `tools/executar_consulta.ps1` faz o mesmo a partir de
+  `config/feriados.csv` (ou gera uma cópia para o SSMS);
+- sem `@Feriados`, lista vazia, JSON ou data inválida: erro, nunca zero
+  feriados.
+
+Lista: as 42 datas com `Conta_SLA = 'N'` viraram 33 linhas de escopo
+`VIRTUAL`/`TODOS` (9 nacionais `MM-DD` e 24 datas). 05/03/2025 (`Conta_SLA = 'S'`)
+ficou fora da Virtual; 2025-07-20 (domingo) saiu. Os nacionais passam a valer em
+todo ano. A Virtual continua sem 2025-06-20 e 2026-06-29 (a Decision e a A2B têm
+2026-06-29, Portaria-TCU nº 93/2026): diferença mantida, registrada em
+`docs/feriados.md`.
+
+Regressão (mesmo instante, SQL antigo com a lista embutida x SQL novo com
+`@Feriados` do arquivo): referência maio/2026 (19), referência 01/10/2025 a
+07/10/2026 (276), Power BI `FECHAMENTO` (276) e `RESOLUCAO` (293): 0 diferenças
+nas 40 colunas. A cópia gerada para o SSMS dá o mesmo resultado. Teste de
+manutenção: com 2026-09-15 incluído só no arquivo, 2 chamados mudam (1727892:
+horas comerciais de resolução 243:24:42 → 231:24:42, um dia útil); retirada a
+data, 0 diferenças; o SQL não mudou (mesmo SHA256). SHA256 do motor:
+`501d841707082fa0107609620c606361e16c052c9db89466eeb1e056e80fc001`.

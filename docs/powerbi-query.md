@@ -9,9 +9,10 @@ Fonte de dados do painel de FAIA e FARC da Virtual. A regra de cálculo está em
 
 | Arquivo | Conteúdo |
 |---|---|
-| `powerbi/consulta_virtual_chamados_power_bi.sql` | todos os chamados elegíveis da Virtual, Comercial e Corrida juntos; a coluna `Tipo SLA` separa os regimes |
+| `powerbi/consulta_virtual_chamados_power_bi.m` | a consulta do relatório (Power Query M): lê o arquivo de feriados no SharePoint, valida e executa o SQL abaixo com o parâmetro `@Feriados`. Gerado por `tools/gerar_powerbi_m.ps1` |
+| `powerbi/consulta_virtual_chamados_power_bi.sql` | o SQL: todos os chamados elegíveis da Virtual, Comercial e Corrida juntos; a coluna `Tipo SLA` separa os regimes |
 
-O arquivo devolve **um único resultado**, como o Power BI espera. Ele substitui
+A consulta devolve **um único resultado**, como o Power BI espera. Ele substitui
 as antigas `consulta_virtual_chamados_tcu_power_bi.sql` (`Chamados_TCU`) e
 `consulta_virtual_chamados_24x7_power_bi.sql` (`Chamados_24x7`), removidas do
 repositório: eram o mesmo motor com filtros opostos no regime (seção 7).
@@ -31,11 +32,11 @@ O bloco é **idêntico byte a byte** nos dois arquivos. SHA256 do bloco, com fim
 linha LF:
 
 ```text
-b24ee071100368f478a5ca23c21325a23df5f9d8f6f400e261438d8b98a20688
+501d841707082fa0107609620c606361e16c052c9db89466eeb1e056e80fc001
 ```
 
-Ele recebe só `@DataInicio`, `@DataFim` e `@DataReferencia` e entrega a
-tabela `#Virt_Saida`, com os dois regimes. Os arquivos diferem apenas no
+Ele recebe `@DataInicio`, `@DataFim`, `@DataReferencia` e `@Feriados` (lista
+de feriados, seção 3) e entrega a tabela `#Virt_Saida`, com os dois regimes. Os arquivos diferem apenas no
 período:
 
 | | Referência | Power BI |
@@ -50,13 +51,28 @@ arquivo do Power BI. Depois da cópia, os dois blocos devem continuar idênticos
 
 ## 3. Como usar no Power BI
 
-1. Obter dados → **SQL Server**.
-2. Servidor do SDM, banco `mdb`, modo **Importação**.
-3. Em *Opções avançadas → Instrução SQL*, colar o arquivo **inteiro**.
-4. Deixar *Incluir colunas de relação* desmarcado.
+O SQL não é mais colado em *Instrução SQL*: os feriados vêm de um arquivo no
+SharePoint, que o SQL Server não lê. A consulta do relatório é o `.m`:
+
+1. *Página Inicial → Nova Fonte → Consulta Nula → Editor Avançado*.
+2. Colar `powerbi/consulta_virtual_chamados_power_bi.m` **inteiro**.
+3. Trocar `INSERIR_URL_DO_ARQUIVO_FERIADOS_NO_SHAREPOINT` pelo link direto do
+   `feriados.csv` no SharePoint (o mesmo da Decision e da A2B).
+4. Credenciais: SQL Server como hoje; SharePoint com conta organizacional.
+   Privacidade das duas fontes: **Organizacional**. No gateway, permitir fontes
+   de nuvem.
+
+A cada atualização o arquivo de feriados é lido de novo. Arquivo inacessível,
+placeholder não preenchido ou linha inválida **falham a atualização** com
+mensagem. Detalhes, requisitos do serviço e o checklist do primeiro refresh
+em [feriados.md](feriados.md).
 
 É uma consulta só no modelo. Para separar os regimes no relatório, filtre pela
 coluna `Tipo SLA`.
+
+Mudança de regra: alterar `consulta_virtual_chamados_power_bi.sql`, gerar o
+`.m` de novo (`.\tools\gerar_powerbi_m.ps1 -Consulta .\powerbi\consulta_virtual_chamados_power_bi.sql`)
+e atualizar a consulta no PBIX. Mudança de feriado: só o arquivo no SharePoint.
 
 ## 4. Período
 
@@ -86,7 +102,8 @@ Regra completa em
 A janela vai do **dia 1 do mês (corrente − `@CoberturaMeses`)** até o fim do dia
 de hoje, pela data escolhida. Com `12`, ela traz os doze meses anteriores,
 inteiros, e o mês corrente até hoje. Para outra cobertura, troque só esse
-número. Nenhuma regra depende dele.
+número (no Power BI, no início do texto `SqlTexto` do Editor Avançado; no
+repositório, no `.sql`, gerando o `.m` de novo). Nenhuma regra depende dele.
 
 Exemplo: atualizado em 15/10/2026, com `12` e `FECHAMENTO`, traz chamados
 fechados de 01/10/2025 até 15/10/2026.
@@ -216,7 +233,7 @@ Mudanças de coluna (mesma posição, mesmo conteúdo):
 Nenhuma coluna foi removida nem acrescentada; `chave` continua igual
 (`Incidente|3|TCU`). Passos no PBIX, **uma vez**:
 
-1. Criar a consulta nova com `powerbi/consulta_virtual_chamados_power_bi.sql`
+1. Criar a consulta nova com `powerbi/consulta_virtual_chamados_power_bi.m`
    (seção 3), chamada, por exemplo, `Chamados`.
 2. Nos visuais e medidas que usavam `Chamados_TCU` ou `Chamados_24x7`, apontar
    para `Chamados`, com filtro `Tipo SLA = Comercial` ou `Tipo SLA = Corrida`
@@ -229,12 +246,10 @@ Nenhuma coluna foi removida nem acrescentada; `chave` continua igual
 ## 8. Cuidados
 
 - A consulta cria só tabelas temporárias (`#Virt_*`). Não grava nada no banco.
-- O calendário embutido vai até 31/12/2026 e precisa ser atualizado a cada ano
-  no bloco `[2]` do motor, na referência, e depois copiado para o arquivo do
-  Power BI (ver
-  [virtual-calculation.md, seção 10](virtual-calculation.md#10-cuidados-e-limitações)).
-  Com a janela de 12 meses, a partir de janeiro de 2027 parte da janela fica
-  fora do calendário até essa atualização.
+- Os feriados vêm do arquivo de feriados no SharePoint ([feriados.md](feriados.md)).
+  Os pontos facultativos de cada ano novo precisam ser cadastrados nele; os
+  feriados fixos (`MM-DD`) já valem todo ano. Não é preciso mudar o SQL nem
+  republicar o relatório.
 - Com `FECHAMENTO`, só entram chamados já fechados: um chamado resolvido e
   ainda não fechado aparece no mês em que for fechado. Com `RESOLUCAO`, ele
   aparece no mês da resolução.

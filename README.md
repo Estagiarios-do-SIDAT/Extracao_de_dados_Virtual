@@ -6,8 +6,9 @@ Consultas SQL e documentação da apuração de **FAIA** e **FARC** do fornecedo
 A consulta lê só o SDM e entrega os chamados da Virtual numa **única tabela**,
 com a coluna `Tipo SLA` (`Corrida` ou `Comercial`) dizendo o regime de cada
 chamado. A contagem de tempo segue a arquitetura de posse da Decision; metas,
-fatores, regime e calendário são os da Virtual e ficam no próprio SQL. Não há
-dependência de arquivo externo.
+fatores e regime são os da Virtual e ficam no próprio SQL. Os feriados vêm do
+arquivo de feriados ([`docs/feriados.md`](docs/feriados.md)): `config/feriados.csv`
+nas consultas de `queries/` e o mesmo arquivo no SharePoint no Power BI.
 
 Este repositório atende **somente a Virtual**. Decision, A2B/Protect4 e COI têm
 repositórios próprios.
@@ -21,10 +22,19 @@ repositórios próprios.
 ├── queries/
 │   └── consulta_virtual_faia_farc.sql              consulta de referência
 ├── powerbi/
-│   └── consulta_virtual_chamados_power_bi.sql      consulta do Power BI (Comercial e Corrida)
+│   ├── consulta_virtual_chamados_power_bi.sql      SQL do Power BI (Comercial e Corrida)
+│   └── consulta_virtual_chamados_power_bi.m        consulta do relatório: feriados do SharePoint + SQL
+├── config/
+│   └── feriados.csv                                feriados e pontos facultativos (cópia versionada)
+├── tools/
+│   ├── executar_consulta.ps1                       executa queries/ com os feriados do arquivo
+│   ├── gerar_powerbi_m.ps1                         gera powerbi/*.m a partir do .sql
+│   ├── verificar_feriados.ps1                      valida o arquivo e a sincronia dos repositórios
+│   └── feriados.ps1                                leitura e validação do arquivo (uso interno)
 ├── docs/
 │   ├── virtual-calculation.md                      regras de cálculo
-│   └── powerbi-query.md                            consultas do Power BI
+│   ├── powerbi-query.md                            consulta do Power BI
+│   └── feriados.md                                 arquivo de feriados (igual nos três repositórios)
 ├── project-context/
 │   └── VIRTUAL-HISTORICO-CONTEXTO-MESTRE.md        contexto de manutenção
 ├── support/                                        consultas auxiliares de investigação
@@ -107,18 +117,29 @@ Em resumo:
   reabertura, vale o encerramento do último ciclo. Vazia quando não há esse
   evento. Não é o fechamento (`close_date`) nem substitui a
   `Data/Hora Resolução`, que continua sendo o marco dos tempos.
-- **Horário comercial (`Comercial`):** 08:00–20:00, segunda a sexta, fora do
-  calendário TCU.
+- **Horário comercial (`Comercial`):** 08:00–20:00, segunda a sexta, fora dos
+  feriados e pontos facultativos do arquivo de feriados (escopo `VIRTUAL`).
 
 A regra completa está em [`docs/virtual-calculation.md`](docs/virtual-calculation.md).
 
-Execute o arquivo **inteiro** na base `mdb`. A consulta só cria tabelas
-temporárias.
+A consulta recebe os feriados pelo parâmetro `@Feriados`, montado a partir de
+`config/feriados.csv` pelo script:
+
+```powershell
+.\tools\executar_consulta.ps1 -Consulta .\queries\consulta_virtual_faia_farc.sql -Saida C:\temp\virtual
+# ou, para abrir no SSMS:
+.\tools\executar_consulta.ps1 -Consulta .\queries\consulta_virtual_faia_farc.sql -GerarSql C:\temp\virtual_ssms.sql
+```
+
+Aberto direto no SSMS, sem o script, o arquivo falha com *Must declare the
+scalar variable "@Feriados"*: a consulta nunca roda sem feriados. Ela só cria
+tabelas temporárias. Detalhes em [`docs/feriados.md`](docs/feriados.md).
 
 ## Consultas do Power BI
 
 | Arquivo | Saída |
 |---|---|
+| [`powerbi/consulta_virtual_chamados_power_bi.m`](powerbi/consulta_virtual_chamados_power_bi.m) | consulta do relatório (Power Query M): lê os feriados do SharePoint e executa o SQL abaixo |
 | [`powerbi/consulta_virtual_chamados_power_bi.sql`](powerbi/consulta_virtual_chamados_power_bi.sql) | todos os chamados (Comercial e Corrida), com as mesmas 40 colunas da referência |
 
 Substitui as antigas `Chamados_TCU` e `Chamados_24x7`, que eram a mesma consulta
@@ -133,16 +154,22 @@ O bloco de cálculo (`MOTOR VIRTUAL`) é idêntico na referência e no Power BI.
 Mudanças de regra são feitas na referência e copiadas para o arquivo do Power
 BI. Detalhes em [`docs/powerbi-query.md`](docs/powerbi-query.md).
 
-## Manutenção anual
+## Feriados
 
-O calendário TCU (feriados e pontos facultativos) fica no bloco `[2]` do motor,
-tabela `#Virt_Calendario`, e hoje cobre **2025 e 2026**. A cada ano novo, inclua
-as datas do ano no bloco da referência e copie o bloco para o arquivo do Power
-BI.
+Os feriados e pontos facultativos ficam no **arquivo de feriados**, e não no
+SQL. Para incluir um feriado: editar o `feriados.csv` no SharePoint e salvar; a
+próxima atualização do relatório já usa a lista nova, sem mudar o SQL nem
+republicar. Manter igual o `config/feriados.csv` dos três repositórios
+(Virtual, Decision, A2B) e conferir com `tools/verificar_feriados.ps1`. Formato,
+escopo por projeto, falhas e a configuração do SharePoint estão em
+[`docs/feriados.md`](docs/feriados.md).
+
+Os feriados fixos (`MM-DD`) valem todo ano; a cada ano novo, cadastrar as datas
+únicas do ano (feriados móveis e pontos facultativos).
 
 ## Como validar
 
-1. Rode a referência com o período do mês.
+1. Rode a referência com o período do mês, pelo `tools/executar_consulta.ps1`.
 2. Confira, por SDM, os marcos (abertura, entrada na Virtual, início,
    resolução, fechamento) e as janelas de posse contra o `act_log` do chamado.
    A consulta `support/consulta_logs_chamados_listados.sql` lista todos os

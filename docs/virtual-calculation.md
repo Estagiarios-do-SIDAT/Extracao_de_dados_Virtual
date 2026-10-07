@@ -5,9 +5,9 @@ que apura FAIA e FARC do fornecedor **Virtual** direto do SDM (`mdb`).
 
 A população vem só do SDM. A responsabilidade temporal segue a arquitetura de
 posse da Decision (`Extracao_de_dados_Decision`): conta só o tempo em que o
-chamado esteve no grupo `Fornecedores - Virtual`. Metas, fatores, regime,
-calendário e horário comercial são os da Virtual e ficam dentro da própria
-consulta. Não há dependência de arquivo externo.
+chamado esteve no grupo `Fornecedores - Virtual`. Metas, fatores, regime e
+horário comercial são os da Virtual e ficam dentro da própria consulta. Os
+feriados vêm do arquivo de feriados (seção 5 e [feriados.md](feriados.md)).
 
 ---
 
@@ -262,16 +262,27 @@ Exemplo (SDM 1697694):
 
 ## 5. Calendário
 
-O calendário TCU fica no bloco `[2]` do motor (`#Virt_Calendario`), com quatro
-campos: `Data`, `Tipo` (Feriado / Facultativo), `Descrição` e `Conta_SLA`.
+Os feriados e pontos facultativos vêm do **arquivo de feriados**, as linhas com
+`Escopo` `TODOS` ou `VIRTUAL` ([feriados.md](feriados.md)). O bloco `[2]` do motor
+recebe a lista no parâmetro `@Feriados`, valida cada data e monta
+`#Virt_Feriado` (datas únicas, `AAAA-MM-DD`) e `#Virt_FeriadoAnual` (fixos,
+`MM-DD`, todo ano). Quem preenche `@Feriados`: `tools/executar_consulta.ps1`
+(consulta de referência) e `powerbi/consulta_virtual_chamados_power_bi.m`
+(Power BI, a partir do SharePoint). Sem `@Feriados`, ou com lista vazia ou
+inválida, a consulta para com erro: nunca calcula com zero feriados.
 
-- `Conta_SLA = 'N'`: a data **não tem horário comercial**.
-- Qualquer outro valor: a data conta como dia normal. Na tabela, só 05/03/2025
-  (quarta-feira de cinzas) não é `N`.
-- Não existe contagem parcial de dia: um dia útil vale das 08:00 às 20:00 inteiro.
+- Uma data do arquivo **não tem horário comercial**. Não existe contagem
+  parcial de dia: um dia útil vale das 08:00 às 20:00 inteiro.
+- Sábado e domingo nunca têm horário comercial.
+- Hoje a Virtual tem 33 linhas: os 9 feriados nacionais fixos e 24 datas de
+  2025 e 2026.
 
-São 43 datas, de 01/01/2025 a 31/12/2026. A lista não foi conferida com fonte
-oficial externa.
+Até 2026-10-06 a lista ficava no próprio SQL (`#Virt_Calendario`, 43 datas de
+2025 e 2026, com `Conta_SLA`). A mudança de fonte não mudou nenhum resultado:
+as mesmas datas sem horário comercial continuam valendo. 05/03/2025 (Quarta-Feira
+de Cinzas, `Conta_SLA = 'S'`, dia normal) ficou fora do escopo `VIRTUAL`;
+2025-07-20 (domingo) saiu; os 9 feriados nacionais passaram a valer em todo ano,
+e não só em 2025 e 2026 (as populações publicadas não chegam a outros anos).
 
 ## 6. Parâmetros
 
@@ -412,7 +423,7 @@ a partir do texto.
 |---|---|---|
 | `Tini (h)` | tempo corrido nas janelas de posse até o Início, em qualquer status | igual |
 | `Tsol (h)` | tempo corrido nas janelas de posse até a Resolução, só em status ativo (7.2) | igual |
-| `Horas Comerciais Resposta (h)` | parte de Tini dentro de 08:00–20:00, seg–sex, fora das datas `N` | 0 |
+| `Horas Comerciais Resposta (h)` | parte de Tini dentro de 08:00–20:00, seg–sex, fora dos feriados (seção 5) | 0 |
 | `Horas Não Comerciais Resposta (h)` | Tini − Comerciais Resposta | Tini |
 | `Horas Comerciais Resolução (h)` | parte de Tsol (trechos ativos) dentro da janela comercial | 0 |
 | `Horas Não Comerciais Resolução (h)` | Tsol − Comerciais Resolução | Tsol |
@@ -566,12 +577,10 @@ parte da consulta.
 
 ## 10. Cuidados e limitações
 
-- **O calendário precisa ser atualizado a cada ano.** Ele cobre 01/01/2025 a
-  31/12/2026. As datas ficam no bloco `[2]` do motor, tabela `#Virt_Calendario`,
-  em `queries/consulta_virtual_faia_farc.sql`. Inclua as datas do ano novo
-  nesse bloco e copie o bloco para o arquivo de `powerbi/` (ver
-  `docs/powerbi-query.md`, seção 2). Sem isso, os feriados do ano novo não são
-  descontados.
+- **Os feriados do ano novo precisam ser cadastrados** no arquivo de feriados
+  (as datas únicas: feriados móveis e pontos facultativos; os fixos `MM-DD` já
+  valem todo ano). A mudança é só no arquivo; o SQL não muda. Sem isso, os
+  pontos facultativos do ano novo não são descontados.
 - Identidade do grupo por UUID: `Fornecedores - Virtual`
   (`0x21679DF702A0EC478B1468D89E769836`). O nome do grupo é lido do cadastro,
   porque o `act_log` registra a transferência pelo nome.
@@ -581,5 +590,5 @@ parte da consulta.
   `act_log` de todos os chamados resolvidos no período; numa janela de 12 meses
   a consulta leva cerca de 50 segundos, contra 1 a 2 segundos no modo
   `FECHAMENTO`.
-- A consulta não lê arquivos externos: escopo, marcos e cálculo vêm do SDM, e
-  parâmetros e calendário estão no próprio SQL.
+- Escopo, marcos e cálculo vêm do SDM, e os parâmetros estão no próprio SQL. O
+  único dado externo é a lista de feriados, recebida em `@Feriados`.

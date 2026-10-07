@@ -46,9 +46,9 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 --               para 'Em homologacao'), desde que o chamado nao esteja em
 --               status de atendimento aberto.
 --   Fechamento  call_req.close_date.
---   Horario     TCU: 08:00-20:00, segunda a sexta, fora das datas com
---               Conta_SLA = 'N' no calendario TCU (bloco [2]). 24x7: tempo
---               corrido.
+--   Horario     Comercial (TCU): 08:00-20:00, segunda a sexta, fora dos
+--               feriados e pontos facultativos (bloco [2], arquivo de
+--               feriados). Corrida (24x7): tempo corrido.
 --
 -- Unidades: as colunas de duracao saem como texto [h]:mm:ss; o calculo e
 -- feito em segundos. Indice = horas de excesso x fator, em pontos percentuais.
@@ -119,62 +119,57 @@ VALUES
     (N'Solicitação', 4,  8.00, 180, N'TCU',  0.4, 0.2),
     (N'Solicitação', 5, 12.00, 360, N'TCU',  0.4, 0.2);
 
+-- FERIADOS-ESCOPO: VIRTUAL
 --------------------------------------------------------------------------------
--- [2] Calendario TCU: feriados e pontos facultativos. Conta_SLA = 'N': a data
---     nao tem horario comercial. Demais datas da tabela contam normalmente.
+-- [2] Feriados e pontos facultativos do regime Comercial (antigo TCU): datas
+--     sem horario comercial.
+--
+-- A lista de feriados NAO fica mais neste arquivo. Ela vem do arquivo de
+-- feriados (config/feriados.csv; no Power BI, a copia no SharePoint), so com as
+-- linhas do escopo declarado em "FERIADOS-ESCOPO", pelo parametro @Feriados
+-- (JSON):
+--   [{"data":"12-25","descricao":"Natal"},{"data":"2026-04-03","descricao":"..."}]
+--   MM-DD      = feriado fixo, vale todo ano;
+--   AAAA-MM-DD = data unica (feriado movel ou ponto facultativo).
+-- Quem preenche @Feriados: tools/executar_consulta.ps1 (consultas de queries/)
+-- e o codigo M de powerbi/*.m (Power BI). Sem @Feriados a consulta nem compila;
+-- lista vazia, JSON ou data invalida param com erro: nunca se calcula com zero
+-- feriados. Data repetida entra uma vez.
 --------------------------------------------------------------------------------
-IF OBJECT_ID('tempdb..#Virt_Calendario') IS NOT NULL DROP TABLE #Virt_Calendario;
-CREATE TABLE #Virt_Calendario (
-    Data      date NOT NULL PRIMARY KEY,
-    Tipo      nvarchar(20) COLLATE DATABASE_DEFAULT NOT NULL,
-    Descricao nvarchar(60) COLLATE DATABASE_DEFAULT NULL,
-    Conta_SLA nchar(1) COLLATE DATABASE_DEFAULT NOT NULL
-);
-INSERT INTO #Virt_Calendario (Data, Tipo, Descricao, Conta_SLA)
-VALUES
-    ('2025-01-01', N'Feriado',     N'Ano Novo',                 N'N'),
-    ('2025-03-03', N'Facultativo', N'Carnaval',                 N'N'),
-    ('2025-03-04', N'Facultativo', N'Carnaval',                 N'N'),
-    ('2025-03-05', N'Facultativo', N'Carnaval',                 N'S'),
-    ('2025-04-17', N'Facultativo', NULL,                        N'N'),
-    ('2025-04-18', N'Feriado',     NULL,                        N'N'),
-    ('2025-04-21', N'Feriado',     N'Tiradentes',               N'N'),
-    ('2025-05-01', N'Feriado',     N'Dia do Trabalhador',       N'N'),
-    ('2025-05-02', N'Facultativo', NULL,                        N'N'),
-    ('2025-06-19', N'Facultativo', NULL,                        N'N'),
-    ('2025-07-20', N'Facultativo', NULL,                        N'N'),
-    ('2025-09-07', N'Feriado',     N'Independência do Brasil',  N'N'),
-    ('2025-10-12', N'Feriado',     N'Nossa Senhora Aparecida',  N'N'),
-    ('2025-10-27', N'Facultativo', NULL,                        N'N'),
-    ('2025-11-02', N'Feriado',     NULL,                        N'N'),
-    ('2025-11-15', N'Feriado',     N'Proclamação da República', N'N'),
-    ('2025-11-20', N'Feriado',     N'Consciência Negra',        N'N'),
-    ('2025-11-21', N'Facultativo', NULL,                        N'N'),
-    ('2025-12-24', N'Facultativo', N'Véspera de Natal',         N'N'),
-    ('2025-12-25', N'Feriado',     N'Natal',                    N'N'),
-    ('2025-12-26', N'Facultativo', NULL,                        N'N'),
-    ('2025-12-31', N'Facultativo', N'Véspera de Ano Novo',      N'N'),
-    ('2026-01-01', N'Feriado',     N'Ano Novo',                 N'N'),
-    ('2026-01-02', N'Facultativo', NULL,                        N'N'),
-    ('2026-02-16', N'Facultativo', N'Carnaval',                 N'N'),
-    ('2026-02-17', N'Facultativo', N'Carnaval',                 N'N'),
-    ('2026-02-18', N'Facultativo', N'Carnaval',                 N'N'),
-    ('2026-04-02', N'Facultativo', NULL,                        N'N'),
-    ('2026-04-03', N'Feriado',     N'Sexta-feira Santa',        N'N'),
-    ('2026-04-20', N'Facultativo', NULL,                        N'N'),
-    ('2026-04-21', N'Feriado',     N'Tiradentes',               N'N'),
-    ('2026-05-01', N'Feriado',     N'Dia do Trabalhador',       N'N'),
-    ('2026-06-04', N'Facultativo', N'Corpus Christi',           N'N'),
-    ('2026-06-05', N'Facultativo', NULL,                        N'N'),
-    ('2026-09-07', N'Feriado',     N'Independência do Brasil',  N'N'),
-    ('2026-10-12', N'Feriado',     N'Nossa Senhora Aparecida',  N'N'),
-    ('2026-10-28', N'Facultativo', NULL,                        N'N'),
-    ('2026-11-02', N'Feriado',     N'Finados',                  N'N'),
-    ('2026-11-15', N'Feriado',     N'Proclamação da República', N'N'),
-    ('2026-11-20', N'Feriado',     N'Consciência Negra',        N'N'),
-    ('2026-12-24', N'Facultativo', N'Véspera de Natal',         N'N'),
-    ('2026-12-25', N'Feriado',     N'Natal',                    N'N'),
-    ('2026-12-31', N'Facultativo', N'Véspera de Ano Novo',      N'N');
+IF OBJECT_ID('tempdb..#Virt_FeriadoEntrada') IS NOT NULL DROP TABLE #Virt_FeriadoEntrada;
+CREATE TABLE #Virt_FeriadoEntrada (data nvarchar(100) NULL, descricao nvarchar(200) NULL);
+IF ISJSON(@Feriados) = 1
+    INSERT INTO #Virt_FeriadoEntrada (data, descricao)
+    SELECT LTRIM(RTRIM(j.data)), LTRIM(RTRIM(j.descricao))
+    FROM OPENJSON(@Feriados) WITH (data nvarchar(100) '$.data', descricao nvarchar(200) '$.descricao') AS j;
+IF ISNULL(ISJSON(@Feriados), 0) = 0 OR NOT EXISTS (SELECT 1 FROM #Virt_FeriadoEntrada)
+BEGIN
+    ;THROW 50001, N'Feriados: @Feriados vazio ou invalido. Execute pelo tools/executar_consulta.ps1 (queries/) ou pelo Power BI (powerbi/*.m).', 1;
+END;
+IF EXISTS (
+    SELECT 1
+    FROM #Virt_FeriadoEntrada AS f
+    WHERE f.data IS NULL
+       OR NOT (   (LEN(f.data) = 10 AND f.data LIKE N'[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND TRY_CONVERT(date, f.data, 23) IS NOT NULL)
+               OR (LEN(f.data) = 5  AND f.data LIKE N'[0-9][0-9]-[0-9][0-9]' AND TRY_CONVERT(date, N'2000-' + f.data, 23) IS NOT NULL))
+)
+BEGIN
+    ;THROW 50002, N'Feriados: @Feriados tem data fora do formato AAAA-MM-DD ou MM-DD.', 1;
+END;
+
+IF OBJECT_ID('tempdb..#Virt_Feriado') IS NOT NULL DROP TABLE #Virt_Feriado;
+CREATE TABLE #Virt_Feriado (Data date NOT NULL PRIMARY KEY);
+INSERT INTO #Virt_Feriado (Data)
+SELECT DISTINCT CONVERT(date, f.data, 23)
+FROM #Virt_FeriadoEntrada AS f
+WHERE LEN(f.data) = 10;
+
+IF OBJECT_ID('tempdb..#Virt_FeriadoAnual') IS NOT NULL DROP TABLE #Virt_FeriadoAnual;
+CREATE TABLE #Virt_FeriadoAnual (MesDia char(5) NOT NULL PRIMARY KEY);
+INSERT INTO #Virt_FeriadoAnual (MesDia)
+SELECT DISTINCT f.data
+FROM #Virt_FeriadoEntrada AS f
+WHERE LEN(f.data) = 5;
 
 --------------------------------------------------------------------------------
 -- [3] Candidatos do periodo, conforme @DataReferencia. Sem substituicao entre
@@ -670,8 +665,9 @@ LEFT JOIN #Virt_Encerramento AS enc
 CREATE UNIQUE CLUSTERED INDEX IX_Virt_Marco ON #Virt_Marco (id);
 
 --------------------------------------------------------------------------------
--- [8] Dias com horario comercial (segunda a sexta, fora das datas com
---     Conta_SLA = 'N'), cobrindo de abertura ate o ultimo marco.
+-- [8] Dias com horario comercial (segunda a sexta, fora dos feriados e
+--     pontos facultativos do bloco [2]), cobrindo de abertura ate o ultimo
+--     marco.
 --------------------------------------------------------------------------------
 DECLARE @DiaMin date = (SELECT MIN(CONVERT(date, abertura)) FROM #Virt_Marco);
 DECLARE @DiaMax date = (SELECT MAX(CONVERT(date, CASE WHEN resolucao > inicio OR inicio IS NULL THEN resolucao ELSE inicio END)) FROM #Virt_Marco);
@@ -697,10 +693,8 @@ FROM (
 -- 1900-01-01 foi segunda-feira: resto 5 e 6 = sabado e domingo, sem depender
 -- de SET DATEFIRST.
 WHERE DATEDIFF(DAY, '19000101', d.Dia) % 7 < 5
-  AND NOT EXISTS (
-        SELECT 1 FROM #Virt_Calendario AS k
-        WHERE k.Data = d.Dia AND k.Conta_SLA = N'N'
-  );
+  AND NOT EXISTS (SELECT 1 FROM #Virt_Feriado AS k WHERE k.Data = d.Dia)
+  AND NOT EXISTS (SELECT 1 FROM #Virt_FeriadoAnual AS k WHERE k.MesDia = RIGHT(CONVERT(char(10), d.Dia, 23), 5));
 
 --------------------------------------------------------------------------------
 -- [9] Status ativos e trechos ate os marcos.
