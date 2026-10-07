@@ -85,7 +85,7 @@ Mudanças de forma, sem efeito nos resultados publicados (conferido):
 - na A2B, a consulta individual do FAIA passou a usar 24/12 e 31/12/2025, como
   o painel e a consulta do FARC já faziam. Era uma divergência registrada da
   consulta individual; com ela, 4 rotinas abertas nesses dias passam de
-  0:30–0:57 para 0:00:00 de Tempo Primeiro Atendimento, o mesmo valor do
+  0:09–0:57 para 0:00:00 de Tempo Primeiro Atendimento, o mesmo valor do
   painel publicado (nenhuma meta muda).
 
 ## 4. Como editar
