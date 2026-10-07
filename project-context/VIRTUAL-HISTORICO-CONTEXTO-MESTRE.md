@@ -14,9 +14,11 @@ Novas intervenções entram como seção nova no fim (seção 12), com data.
 Apurar, direto do SDM (`mdb`), FAIA e FARC da Virtual em duas grades por
 regime (`Chamados_TCU` e `Chamados_24x7`).
 
-**Estado vigente:** o motor depende só de dados e regras do SDM. Escopo, posse e
-período seguem a arquitetura da Decision; parâmetros e calendário da Virtual
-ficam no próprio SQL. Não existe separação DCIM x Manutenção nem parâmetro
+**Estado vigente:** o motor depende só de dados do SDM e do arquivo de
+feriados. **Fonte funcional: Edital PE 90028/2025 e anexos** (Anexo VII em
+especial), desde a revisão contratual de 2026-10-07 (seção 12, última
+intervenção); a técnica de posse e de leitura do `act_log` foi reaproveitada
+da Decision, mas não é fonte de regra. Parâmetros ficam no próprio SQL. Não existe separação DCIM x Manutenção nem parâmetro
 `@Planilha` (seção 12, intervenção de 2026-10-02 "remoção da dependência de
 planilha").
 
@@ -977,3 +979,69 @@ colunas, 0 diferenças); Privado/Público ou nível não definido são recusados
 falhas e casos de borda conferidos. SharePoint Online real, OAuth2, PBIX,
 gateway e refresh no serviço ainda dependem do ambiente. SHA256 do motor:
 `e94e8bfe4f9d7f4f3c57c7431155a51871de7c64a2f76a968c254f8bca31ea96`.
+
+### 2026-10-07 — revisão contratual de FAIA e FARC (Anexo VII)
+
+Pedido do usuário: usar o Edital PE 90028/2025 e anexos como fonte de verdade,
+sem alterar o primeiro atendimento (`Data/Hora Início Atendimento` e
+`Tini (h)`), e sem usar Decision/A2B como fonte de regra. Baseline: Virtual
+`15dbe62`, Decision `03a6c4f`, A2B `20d50e9`, COI `6eb634d`.
+
+Conferido no PDF original do Anexo VII (autenticidade 77219622): Tabela 1
+(metas e cobertura) e Tabela 2 (fatores) iguais aos parâmetros em uso; nada
+mudou nelas.
+
+Divergências comprovadas e corrigidas:
+
+| Regra | Antes (herança da Decision / orientação de 2026-10-06) | Agora (contrato) |
+|---|---|---|
+| Tsol (FARC) | posse da Virtual ∩ status ativos (`FIP`, `OP`, `REAB`); demais status e `SOLN` pausavam | T0 (`open_date`) → T2 sem homologação (`EMHOM`, `CQ`) — 3.1.8 |
+| `Aguarda atendimento` (`REOP`) | pausava (decisão de 2026-10-05 pelo impacto) | conta: o contrato não suspende por status |
+| `Agendado` | pausava | conta; suspensão exige anuência do TCU (3.4.4, 3.6.1), não registrada no SDM; sai em `Tempo Agendado` |
+| Tempo fora do grupo Virtual | não contava | conta (T0 = registro, 3.1.6); sai em `Tempo Fora Grupo Virtual` |
+| Reabertura | `Reaberto` contava por orientação do gerente | conta por 3.7.5/3.8.3 (prazo desde a abertura original); o tempo entre solução e reabertura também |
+
+Renomeações: `Tipo SLA` → `Contagem` (`Corrida` → `24x7`, `Comercial` →
+`Horário TCU`, decisão do usuário; a "Cobertura" da Tabela 1); `Severidade` →
+`Prioridade` (número 1 a 5; a Tabela 4 não rotula a prioridade 5);
+`Horas Comerciais`/`Não Comerciais` → `Horas Horário TCU`/`Fora Horário TCU`
+(agora com a divisão real também na 24x7); `Tempo suspenso` →
+`Tempo Parada Contagem NMS (h)` (6.19.13; só a homologação descontada);
+`Meta Atendimento` → `Situação Meta Resolução`; `chave` com `Horário TCU`.
+Colunas novas, informativas: `Tempo Agendado (h)` e
+`Tempo Fora Grupo Virtual (h)`. Saída com 42 colunas.
+
+Não alterado (documentado em `docs/virtual-calculation.md`, seções 4, 7.4,
+7.5, 9, 11 e 12): T1/Tini (congelados; divergem do 3.1.6/3.1.7), FAIA,
+população, prioridade gravada na reabertura e na reclassificação (3.2.4 em
+aberto), arredondamento (6 casas por chamado; 2 casas no somatório, na
+consolidação). **Item contratual n ∈ N: bloqueio funcional** — o SDM não
+registra o item e o Anexo IX liga as atividades aos "itens 2 e 3" juntos.
+
+Evidências no SDM (01/2025 a 10/2026, 293 chamados resolvidos): T2
+(`resolve_date`) = entrada em `Em homologação` em 286 (±1 s) e `SOLN` em 7;
+homologação antes do T2 só em 1650824 e 1647705; 289 registrados fora do grupo
+Virtual (mediana 7,5 min até a entrada); 33 com `Agendado`, todos agendados
+por terceirizados, com justificativa só em texto livre; trocas de prioridade
+(`ESC`) em 12 chamados, nenhuma reclassificação mais rigorosa com novo
+chamado.
+
+Validação: `Tsol` igual ao das planilhas NMS do TCU (Resolução − Abertura) em
+10/11 (maio/2026), 20/21 (julho/2026) e 24/26 (2025); antes, 0. Recálculo
+independente em Python (linha do tempo + feriados) igual ao SQL em 293/293 e
+276/276. Referência = Power BI = `.m` no motor do Power BI Desktop: 276 linhas,
+42 colunas, 0 diferenças.
+
+Efeito contra `15dbe62`, mesmo instante:
+
+| Consulta | Chamados | `Data/Hora Início Atendimento` / `Tini (h)` | FAIA alterados | FARC alterados | Índice FARC total | Atende → Não Atende |
+|---|---|---|---|---|---|---|
+| referência maio/2026 (FECHAMENTO) | 19 | 0 / 0 dif. | 0 | 0 | 0 → 0 | 0 |
+| 01/2025–10/2026 FECHAMENTO (= Power BI 12 meses) | 276 | 0 / 0 dif. | 0 | 20 | 1302,65 → 1441,69 (+139,04) | 7 |
+| 01/2025–10/2026 RESOLUCAO | 293 | 0 / 0 dif. | 0 | 26 | 1354,47 → 1948,75 (+594,28) | 8 |
+
+Maiores: 1651174 (RESOLUCAO; 9 meses em `Agendado`, 9 dias fora da Virtual
+antes da entrada) 0 → 408,08; 1650826 0 → 42,38; 1667813 24,58 → 43,37;
+1651064 0 → 25,08. Nenhum chamado passou de Não Atende para Atende.
+
+SHA256 do motor (LF): `1bd7e66fffa0efcfec6430fa66608f507f37301a07251125c6a6077ccaa50abe`.

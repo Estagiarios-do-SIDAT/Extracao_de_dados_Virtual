@@ -10,7 +10,7 @@ Fonte de dados do painel de FAIA e FARC da Virtual. A regra de cálculo está em
 | Arquivo | Conteúdo |
 |---|---|
 | `powerbi/consulta_virtual_chamados_power_bi.m` | a consulta do relatório (Power Query M): lê o arquivo de feriados no SharePoint, valida e executa o SQL abaixo com o parâmetro `@Feriados`. Gerado por `tools/gerar_powerbi_m.ps1` |
-| `powerbi/consulta_virtual_chamados_power_bi.sql` | o SQL: todos os chamados elegíveis da Virtual, Comercial e Corrida juntos; a coluna `Tipo SLA` separa os regimes |
+| `powerbi/consulta_virtual_chamados_power_bi.sql` | o SQL: todos os chamados elegíveis da Virtual, nas duas Contagens; a coluna `Contagem` (`24x7` / `Horário TCU`) separa |
 
 A consulta devolve **um único resultado**, como o Power BI espera. Ele substitui
 as antigas `consulta_virtual_chamados_tcu_power_bi.sql` (`Chamados_TCU`) e
@@ -32,19 +32,19 @@ O bloco é **idêntico byte a byte** nos dois arquivos. SHA256 do bloco, com fim
 linha LF:
 
 ```text
-e94e8bfe4f9d7f4f3c57c7431155a51871de7c64a2f76a968c254f8bca31ea96
+1bd7e66fffa0efcfec6430fa66608f507f37301a07251125c6a6077ccaa50abe
 ```
 
 Ele recebe `@DataInicio`, `@DataFim`, `@DataReferencia` e `@Feriados` (lista
-de feriados, seção 3) e entrega a tabela `#Virt_Saida`, com os dois regimes. Os arquivos diferem apenas no
+de feriados, seção 3) e entrega a tabela `#Virt_Saida`, com as duas Contagens. Os arquivos diferem apenas no
 período:
 
 | | Referência | Power BI |
 |---|---|---|
 | Período | `@DataInicio` / `@DataFim` digitados | calculado a partir de hoje (seção 4) |
-| Saída | um resultado, Comercial e Corrida | igual |
+| Saída | um resultado, Horário TCU e 24x7 | igual |
 
-As duas consultas têm as mesmas 40 colunas, na mesma ordem.
+As duas consultas têm as mesmas 42 colunas, na mesma ordem.
 
 Qualquer mudança de regra é feita no bloco da referência e copiada para o
 arquivo do Power BI. Depois da cópia, os dois blocos devem continuar idênticos.
@@ -72,8 +72,8 @@ privacidade; o acesso ao SharePoint Online real e o refresh no serviço ainda
 dependem de validação no PBIX. Detalhes, requisitos do serviço e o checklist do
 primeiro refresh em [feriados.md](feriados.md).
 
-É uma consulta só no modelo. Para separar os regimes no relatório, filtre pela
-coluna `Tipo SLA`.
+É uma consulta só no modelo. Para separar as Contagens no relatório, filtre pela
+coluna `Contagem`.
 
 Mudança de regra: alterar `consulta_virtual_chamados_power_bi.sql`, gerar o
 `.m` de novo (`.\tools\gerar_powerbi_m.ps1 -Consulta .\powerbi\consulta_virtual_chamados_power_bi.sql`)
@@ -113,37 +113,37 @@ repositório, no `.sql`, gerando o `.m` de novo). Nenhuma regra depende dele.
 Exemplo: atualizado em 15/10/2026, com `12` e `FECHAMENTO`, traz chamados
 fechados de 01/10/2025 até 15/10/2026.
 
-Volume de referência (janela de 01/10/2025 a 06/10/2026): 276 chamados com
-`FECHAMENTO` (264 Comercial, 12 Corrida), em cerca de 10 segundos; 293 com
-`RESOLUCAO` (281 Comercial, 12 Corrida), mais lento, porque o modo lê o
+Volume de referência (janela de 01/10/2025 a 07/10/2026): 276 chamados com
+`FECHAMENTO` (264 Horário TCU, 12 24x7), em cerca de 10 a 45 segundos; 293 com
+`RESOLUCAO` (281 Horário TCU, 12 24x7), mais lento, porque o modo lê o
 `act_log` de todos os chamados resolvidos na janela.
 
 ## 5. Saída
 
-As mesmas 40 colunas da referência, na mesma ordem:
+As mesmas 42 colunas da referência, na mesma ordem:
 
 | # | Coluna | Unidade |
 |---|---|---|
 | 1 | ID Chamado | texto |
 | 2 | Resumo | texto (`call_req.summary`) |
 | 3 | Tipo (Incidente/Solicitação) | texto |
-| 4 | Severidade | `1 - Máxima` / `2 - Alta` / `3 - Média` / `4 - Baixa` / `5 - Mínima` / `NãoInformada` |
-| 5 | Tipo SLA | `Corrida` / `Comercial` / `N/A` |
-| 6 | Data/Hora Abertura | data e hora (Brasil) |
-| 7 | Data/Hora Início Atendimento | data e hora (Brasil) |
-| 8 | Data/Hora Resolução | data e hora (Brasil) |
+| 4 | Prioridade | número 1 a 5 (Tabela 4 do Anexo VII) |
+| 5 | Contagem | `24x7` / `Horário TCU` / `N/A` (a "Cobertura" da Tabela 1) |
+| 6 | Data/Hora Abertura | data e hora (Brasil): T0 |
+| 7 | Data/Hora Início Atendimento | data e hora (Brasil): início (congelado) |
+| 8 | Data/Hora Resolução | data e hora (Brasil): T2 |
 | 9 | **Data/Hora Fechamento** | data e hora (Brasil) |
-| 10 | Tini (h) | texto `[h]:mm:ss` |
-| 11 | Tsol (h) | texto `[h]:mm:ss` |
-| 12 | Horas Comerciais Resposta (h) | texto `[h]:mm:ss` |
-| 13 | Horas Não Comerciais Resposta (h) | texto `[h]:mm:ss` |
-| 14 | Horas Comerciais Resolução (h) | texto `[h]:mm:ss` |
-| 15 | Horas Não Comerciais Resolução (h) | texto `[h]:mm:ss` |
+| 10 | Tini (h) | texto `[h]:mm:ss` (congelado) |
+| 11 | Tsol (h) | texto `[h]:mm:ss`: T2 − T0 sem homologação |
+| 12 | Horas Horário TCU Resposta (h) | texto `[h]:mm:ss` |
+| 13 | Horas Fora Horário TCU Resposta (h) | texto `[h]:mm:ss` |
+| 14 | Horas Horário TCU Resolução (h) | texto `[h]:mm:ss` |
+| 15 | Horas Fora Horário TCU Resolução (h) | texto `[h]:mm:ss` |
 | 16 | Meta Resposta (h) | texto `[h]:mm:ss` |
 | 17 | Meta Resolução (h) | texto `[h]:mm:ss` |
 | 18 | Excesso Resposta (h) | texto `[h]:mm:ss` |
 | 19 | Excesso Resolução (h) | texto `[h]:mm:ss` |
-| 20 | chave | `Tipo\|Prioridade\|Regime` (prioridade numérica, regime interno `24x7`/`TCU`) |
+| 20 | chave | `Tipo\|Prioridade\|Contagem` (ex.: `Solicitação\|3\|Horário TCU`) |
 | 21 | Fator FARC | decimal |
 | 22 | Indice FARC | pontos percentuais |
 | 23 | Fator FAIA | decimal |
@@ -154,50 +154,56 @@ As mesmas 40 colunas da referência, na mesma ordem:
 | 28 | Responsável Atendimento | texto |
 | 29 | Item de Configuração | texto |
 | 30 | Data Entrada Grupo Virtual | data e hora (Brasil) |
-| 31 | Tempo suspenso | texto `[h]:mm:ss` (posse em status que pausam) |
-| 32 | Meta Primeiro Atendimento | `Atende` / `Não Atende` / `N/A` |
-| 33 | Indicador Reabertura | `Sim` / `Não`: o chamado foi reaberto (não é tempo ativo) |
-| 34 | Acordo Prazo | `-` |
-| 35 | Acordo Qualidade | `-` |
-| 36 | Justificativa | `-` |
-| 37 | Meta Atendimento | `Atende` / `Não Atende` / `N/A` |
-| 38 | Grupo | texto: grupo no instante de referência (fechamento ou resolução) |
-| 39 | Indicador de Agendamento | `Sim` / `Não`: passou para `Agendado` durante a posse da Virtual |
-| 40 | Data de Encerramento Virtual | data e hora (Brasil): último encerramento da Virtual na posse (entrada em `Em homologação` ou `SOLN`); vazia se não houver |
+| 31 | Tempo Parada Contagem NMS (h) | texto `[h]:mm:ss`: homologação entre T0 e T2, descontada do `Tsol` |
+| 32 | Tempo Agendado (h) | texto `[h]:mm:ss`: `Agendado` entre T0 e T2 (informativo, está no `Tsol`) |
+| 33 | Tempo Fora Grupo Virtual (h) | texto `[h]:mm:ss`: T0 a T2 fora do grupo Virtual (informativo, está no `Tsol`) |
+| 34 | Meta Primeiro Atendimento | `Atende` / `Não Atende` / `N/A` |
+| 35 | Indicador Reabertura | `Sim` / `Não`: o chamado foi reaberto |
+| 36 | Acordo Prazo | `-` |
+| 37 | Acordo Qualidade | `-` |
+| 38 | Justificativa | `-` |
+| 39 | Situação Meta Resolução | `Atende` / `Não Atende` / `N/A` |
+| 40 | Grupo | texto: grupo no instante de referência (fechamento ou resolução) |
+| 41 | Indicador de Agendamento | `Sim` / `Não`: passou para `Agendado` durante a posse da Virtual |
+| 42 | Data de Encerramento Virtual | data e hora (Brasil): último encerramento da Virtual na posse (entrada em `Em homologação` ou `SOLN`); vazia se não houver |
 
 Uma linha por chamado. Os blocos e a origem de cada coluna estão em
 [virtual-calculation.md, seção 8](virtual-calculation.md#8-mapa-das-colunas);
-as colunas no padrão da Decision, na seção 8.1.
+os nomes revisados em 2026-10-07, na seção 8.1.
 
-As durações (as 10 do bloco B e `Tempo suspenso`) saem como texto
+As durações saem como texto
 `[h]:mm:ss`: horas sem limite
 de 24 (`73:21:56`), zero como `0:00:00`. Como são texto, o Power BI não as soma;
 os totais de FAIA e FARC vêm das colunas `Indice FAIA` e `Indice FARC`, que são
 numéricas e calculadas em segundos dentro do motor, antes da formatação. Não há
 coluna numérica auxiliar de duração na saída.
 
-Os tempos contam só as janelas de posse da Virtual, a partir da primeira
-entrada no grupo (ver
-[virtual-calculation.md, seção 7.1](virtual-calculation.md#71-janelas-de-posse-da-virtual)).
-`Tsol (h)` conta só os status ativos (`Em andamento`, `Aberto, aguarda
-atendimento` e `Reaberto`); o tempo de posse em `Aguarda atendimento`,
-`Agendado`, depois de uma solução registrada e nos demais status de espera sai
-em `Tempo suspenso` (seção 7.2).
+`Tsol (h)` segue o Anexo VII 3.1.8: do registro (T0) à resolução (T2), sem
+os intervalos de homologação. Nenhum status suspende a contagem sozinho; o
+tempo em `Agendado` e fora do grupo Virtual fica no `Tsol` e sai também nas
+colunas informativas, para a fiscalização avaliar
+([virtual-calculation.md, seções 7.2 e 7.3](virtual-calculation.md#72-tsol-de-t0-a-t2-sem-homologação)).
+`Tini (h)` e `Data/Hora Início Atendimento` são os do primeiro atendimento,
+congelados (seção 4 do mesmo documento).
 
 `Grupo` é o grupo do chamado no instante de referência, pelo histórico de
 transferências: com `FECHAMENTO`, o grupo no fechamento (sempre a Virtual,
 porque é o critério do escopo); com `RESOLUCAO`, o grupo na resolução.
 
-Para separar por regime, filtre `Tipo SLA`; por serviço ou objeto atendido,
+Para separar por Contagem, filtre `Contagem`; por serviço ou objeto atendido,
 use `Item de Configuração` e `Categoria`. Para o total de FAIA ou FARC de um
 mês, some `Indice FAIA` ou `Indice FARC`, filtrando o mês da data escolhida em
-`@DataReferencia`.
+`@DataReferencia`. O contrato soma por item (itens 2, 3 e 4 do Edital), e a
+consulta não identifica o item: ver
+[virtual-calculation.md, seção 11](virtual-calculation.md#11-item-contratual-n--n-bloqueio-funcional).
 
 ## 6. Conferência
 
 Com o mesmo período, a consulta do Power BI tem as mesmas linhas e os mesmos
 valores da referência com a mesma `@DataReferencia`. Na janela de 01/10/2025 a
-07/10/2026: 276 chamados com `FECHAMENTO`, nenhuma diferença nas 40 colunas. A
+07/10/2026: 276 chamados com `FECHAMENTO`, nenhuma diferença nas 42 colunas
+(SQL da referência, SQL do Power BI e `.m` executado no motor do Power BI
+Desktop, em 2026-10-07). A
 janela do Power BI vai até amanhã; um chamado fechado hoje aparece nele e não
 numa referência que termine hoje à 00:00.
 
@@ -209,6 +215,10 @@ reconciliar os SDMs do resultado SQL com os relatórios da Virtual. Ela não
 interfere nos cálculos nem na população da consulta.
 
 ## 7. Migração de Chamados_TCU e Chamados_24x7
+
+Os nomes desta seção são os de 2026-10-06. Na migração, use os nomes atuais da
+seção 7.1 (`Contagem` no lugar de `Tipo SLA`, `Prioridade` no lugar de
+`Severidade`).
 
 Até 2026-10-06 o painel tinha duas consultas: `Chamados_TCU` (regime TCU) e
 `Chamados_24x7` (regime 24x7). Eram o mesmo motor, com o filtro final
@@ -247,6 +257,24 @@ Nenhuma coluna foi removida nem acrescentada; `chave` continua igual
    `Resumo`, `Prioridade` → `Severidade` (texto; filtros numéricos passam a
    usar o rótulo), `Regime` → `Tipo SLA`.
 4. Excluir as consultas `Chamados_TCU` e `Chamados_24x7` do modelo.
+
+### 7.1 Renomeações de 2026-10-07 (revisão contratual)
+
+Mesmo motor, colunas na terminologia do Anexo VII. No PBIX, trocar as
+referências:
+
+| # | Antes | Depois | O que muda no valor |
+|---|---|---|---|
+| 4 | `Severidade` (`3 - Média`) | `Prioridade` | número `3` |
+| 5 | `Tipo SLA` (`Corrida` / `Comercial`) | `Contagem` | `24x7` / `Horário TCU` |
+| 12–15 | `Horas Comerciais ...` / `Horas Não Comerciais ...` | `Horas Horário TCU ...` / `Horas Fora Horário TCU ...` | na Contagem `24x7` passam a mostrar a divisão real (antes 0 e o total) |
+| 20 | `chave` com `TCU` | `chave` com `Horário TCU` | `Solicitação\|3\|Horário TCU` |
+| 31 | `Tempo suspenso` | `Tempo Parada Contagem NMS (h)` | só a homologação descontada do `Tsol` |
+| 32, 33 | — | `Tempo Agendado (h)`, `Tempo Fora Grupo Virtual (h)` | colunas novas, informativas |
+| 39 | `Meta Atendimento` | `Situação Meta Resolução` | nada |
+
+O `Tsol`, o excesso e o índice de resolução mudaram de regra (Anexo VII 3.1.8);
+o primeiro atendimento não mudou.
 
 ## 8. Cuidados
 

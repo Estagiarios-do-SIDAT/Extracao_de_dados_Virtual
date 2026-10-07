@@ -4,11 +4,19 @@ Consultas SQL e documentação da apuração de **FAIA** e **FARC** do fornecedo
 **Virtual**, a partir da base do **CA Service Desk Manager** (`mdb`).
 
 A consulta lê só o SDM e entrega os chamados da Virtual numa **única tabela**,
-com a coluna `Tipo SLA` (`Corrida` ou `Comercial`) dizendo o regime de cada
-chamado. A contagem de tempo segue a arquitetura de posse da Decision; metas,
-fatores e regime são os da Virtual e ficam no próprio SQL. Os feriados vêm do
-arquivo de feriados ([`docs/feriados.md`](docs/feriados.md)): `config/feriados.csv`
-nas consultas de `queries/` e o mesmo arquivo no SharePoint no Power BI.
+com a coluna `Contagem` (`24x7` ou `Horário TCU`) dizendo a janela de contagem
+de cada chamado.
+
+**Fonte funcional: o Edital PE 90028/2025 e seus anexos**, em especial o
+Anexo VII (Níveis Mínimos de Serviço): metas e cobertura (Tabela 1), fatores
+(Tabela 2), marcos T0/T1/T2 (itens 3.1.6 a 3.1.8), Horário TCU e 24x7 (3.1.13 e
+3.1.14), suspensão, reclassificação e reabertura (3.4 a 3.8). Parte da técnica
+(leitura do `act_log`, janelas de posse) foi reaproveitada da Decision, mas não
+é fonte de regra. A rastreabilidade regra → cláusula → SQL está em
+[`docs/virtual-calculation.md`](docs/virtual-calculation.md#13-rastreabilidade-contratual).
+Os feriados vêm do arquivo de feriados ([`docs/feriados.md`](docs/feriados.md)):
+`config/feriados.csv` nas consultas de `queries/` e o mesmo arquivo no
+SharePoint no Power BI.
 
 Este repositório atende **somente a Virtual**. Decision, A2B/Protect4 e COI têm
 repositórios próprios.
@@ -22,7 +30,7 @@ repositórios próprios.
 ├── queries/
 │   └── consulta_virtual_faia_farc.sql              consulta de referência
 ├── powerbi/
-│   ├── consulta_virtual_chamados_power_bi.sql      SQL do Power BI (Comercial e Corrida)
+│   ├── consulta_virtual_chamados_power_bi.sql      SQL do Power BI (Horário TCU e 24x7)
 │   └── consulta_virtual_chamados_power_bi.m        consulta do relatório: feriados do SharePoint + SQL
 ├── config/
 │   └── feriados.csv                                feriados e pontos facultativos (cópia versionada)
@@ -44,13 +52,13 @@ repositórios próprios.
 ## Consulta de referência
 
 [`queries/consulta_virtual_faia_farc.sql`](queries/consulta_virtual_faia_farc.sql)
-devolve **um resultado**, com 40 colunas e uma linha por chamado. A coluna
-`Tipo SLA` separa os regimes:
+devolve **um resultado**, com 42 colunas e uma linha por chamado. A coluna
+`Contagem` diz a janela de contagem (no Anexo VII, a "Cobertura" da Tabela 1):
 
-| Tipo SLA | Severidades | Contagem (primeiro atendimento e resolução) |
-|---|---|---|
-| `Corrida` | P1 e P2 (antigo regime 24x7) | tempo corrido, 24 h por dia |
-| `Comercial` | P3, P4 e P5 (antigo regime TCU) | segunda a sexta, 08:00–20:00, sem feriados e pontos facultativos |
+| Contagem | Prioridades | Janela (resposta inicial e resolução) | Anexo VII |
+|---|---|---|---|
+| `24x7` | P1 e P2 | 00:00:00–23:59:59, todos os dias, tempo corrido | 3.1.14 |
+| `Horário TCU` | P3, P4 e P5 | 08:00–20:00, segunda a sexta, dias úteis (sem feriados e pontos facultativos) | 3.1.13 |
 
 Parâmetros no topo do arquivo:
 
@@ -80,48 +88,60 @@ Em resumo:
   foi uma entrada na Virtual, ou nasceram nela sem transferência). Ter passado
   pela Virtual não basta. Em `RESOLUCAO`: resolvidos dentro de uma
   janela de posse da Virtual, fechados ou não.
-- **Tipo SLA:** `Corrida` (antigo 24x7) ou `Comercial` (antigo TCU), pela
-  combinação Tipo + Prioridade. O mesmo regime vale para o primeiro atendimento
-  e para a resolução.
-- **Posse:** o relógio começa na primeira entrada na Virtual (na abertura, se
-  o chamado nasceu nela), para nas saídas e volta nas reentradas; todas as
-  janelas de posse são somadas.
-- **Tempos (modelo da Decision):** `Tini (h)` é o Tempo Primeiro Atendimento:
-  tempo de posse até o primeiro `Em andamento` dentro da posse (sem ele, a
-  primeira atividade registrada na posse; sem atividade, a entrada). `Tsol (h)`
-  é o Tempo de Atendimento: tempo de posse até a resolução, contando só os
-  status ativos `Em andamento`, `Aberto, aguarda atendimento` e `Reaberto`
-  (lista explícita, e não `cr_stat.hold`); os demais (`Aguarda atendimento`,
-  `Agendado`, solução registrada...) pausam e vão para `Tempo suspenso`.
-  `Excesso Resposta (h)` e `Excesso Resolução (h)` correspondem ao Primeiro
-  Atendimento Excedido e ao Tempo Atendimento Excedido da Decision.
-- **Colunas:** identificação e datas (com `Data/Hora Fechamento`), as 15
-  colunas de apuração da Virtual e colunas de contexto no padrão da Decision,
-  entre elas `Resumo`, `Severidade`, `Status`, `Categoria`, os responsáveis
-  pela abertura e pelo atendimento, as metas e `Item de Configuração`, com a
-  mesma definição das colunas de mesmo nome da Decision. Não há
-  `Responsável Resolução`: essa coluna não existe na Decision, e criá-la seria
-  uma regra nova (ver `docs/virtual-calculation.md`, seção 8.1). `Grupo` (coluna 38) é o grupo do chamado no instante de
-  referência, pelo histórico de transferências: no fechamento (`FECHAMENTO`) ou
-  na resolução (`RESOLUCAO`).
-  `Tempo suspenso` é o tempo de posse até a resolução em status que pausam;
-  `Tsol` + `Tempo suspenso` = posse total até a resolução. As durações saem como
-  `[h]:mm:ss`; fatores e índices são numéricos e calculados em segundos.
+- **Metas, Contagem e fatores:** Anexo VII, Tabelas 1 e 2, por Tipo +
+  Prioridade (bloco `[1]`). A mesma Contagem vale para a resposta inicial e
+  para a resolução.
+- **Primeiro atendimento (congelado):** `Data/Hora Início Atendimento` e
+  `Tini (h)` (Tempo Primeiro Atendimento) não mudaram nesta revisão, por decisão
+  do usuário: início = primeiro `Em andamento` dentro da posse da Virtual (sem
+  ele, a primeira atividade registrada na posse; sem atividade, a entrada);
+  `Tini` = tempo de posse até o início. O Anexo VII define T1 como a
+  assinatura do analista no campo "responsável" e a resposta inicial como
+  T1 − T0 (3.1.6, 3.1.7); a diferença está documentada em
+  `docs/virtual-calculation.md`, seção 4.
+- **Resolução (FARC):** `Tsol (h)` conta de **T0** (registro do chamado,
+  `Data/Hora Abertura`) até **T2** (`Data/Hora Resolução`), sem os intervalos
+  de homologação (`Em homologação` e `Em homologação pelo fiscal`) antes da
+  resolução (Anexo VII 3.1.8). Nenhum status suspende a contagem sozinho: o
+  contrato só aceita suspensão justificada e com anuência do TCU (3.4.4, 3.6.1),
+  e o SDM não registra essa anuência. Reabertura não reinicia a contagem: o
+  prazo continua contado da abertura original (3.7.5, 3.8.3).
+- **Excesso e índices:** excesso = tempo − meta, quando positivo, por chamado
+  (Equações 1 e 4). Na Contagem `Horário TCU` o tempo é o das horas dentro do
+  Horário TCU; na `24x7`, o tempo corrido. Índice = horas de excesso × fator
+  (Equações 2 e 5). A soma por item, tipo e prioridade (Equações 3 e 6) e o
+  arredondamento do somatório em duas casas são da consolidação, fora da
+  consulta.
+- **Colunas de parada e de apoio à fiscalização:** `Tempo Parada Contagem NMS
+  (h)` é o tempo descontado do `Tsol` (homologação antes da resolução; Anexo VII
+  6.19.13). `Tempo Agendado (h)` e `Tempo Fora Grupo Virtual (h)` são
+  informativos: mostram quanto do `Tsol` o chamado passou em `Agendado` ou fora
+  do grupo Virtual. Já estão no `Tsol` e só saem dele se o TCU reconhecer a
+  suspensão (3.6.1).
+- **Item contratual:** a consulta **não** separa os itens 2, 3 e 4 do Edital
+  (conjunto `N` da Tabela 3). O SDM não registra o item, e o Anexo IX liga as
+  atividades aos "itens 2 e 3" juntos. Ver `docs/virtual-calculation.md`,
+  seção 11 (bloqueio funcional).
+- **Colunas:** identificação e datas (com `Data/Hora Fechamento`), as colunas
+  de apuração e colunas de contexto: `Resumo` (a breve descrição, 6.19.14),
+  `Prioridade` (1 a 5, Tabela 4), `Status`, `Categoria`, os responsáveis pela
+  abertura e pelo atendimento, `Item de Configuração`, `Grupo` (grupo no
+  instante de referência: fechamento ou resolução), `Situação Meta Resolução`
+  e `Meta Primeiro Atendimento` (`Atende`/`Não Atende`). Não há
+  `Responsável Resolução` (ver `docs/virtual-calculation.md`, seção 8.1). As
+  durações saem como `[h]:mm:ss`; fatores e índices são numéricos e
+  calculados em segundos.
 - **Indicadores (`Sim`/`Não`):** `Indicador Reabertura` diz se o chamado foi
-  reaberto em algum momento (mesma regra da Decision). `Indicador de
-  Agendamento` (coluna 39) diz se o chamado passou para `Agendado` durante a
-  posse da Virtual. Os dois são informativos: não mudam tempos, excessos nem
-  índices. O indicador só diz que houve reabertura; o tempo em `Reaberto`
-  dentro da posse conta no `Tsol`, como status ativo.
-- **Data de Encerramento Virtual (última coluna, 40):** o último encerramento
-  da atuação da Virtual durante a posse, por entrada em `Em homologação` ou por
-  `SOLN` (solução registrada), como a Data de Encerramento Decision. Com
-  reabertura, vale o encerramento do último ciclo. Vazia quando não há esse
-  evento. Não é o fechamento (`close_date`) nem substitui a
-  `Data/Hora Resolução`, que continua sendo o marco dos tempos.
-- **Horário comercial (`Comercial`):** 08:00–20:00, segunda a sexta, fora dos
-  feriados e pontos facultativos do calendário do TCU (arquivo de feriados, o
-  mesmo da Decision e da A2B).
+  reaberto. `Indicador de Agendamento` diz se o chamado passou para `Agendado`
+  durante a posse da Virtual. Os dois são informativos: não mudam tempos,
+  excessos nem índices.
+- **Data de Encerramento Virtual:** o último encerramento da atuação da Virtual
+  durante a posse, por entrada em `Em homologação` ou por `SOLN` (solução
+  registrada). Coluna informativa, sem equivalente no contrato. Não é o
+  fechamento (`close_date`) nem substitui a `Data/Hora Resolução` (T2).
+- **Horário TCU:** 08:00–20:00, segunda a sexta, fora dos feriados e pontos
+  facultativos do calendário do TCU (arquivo de feriados, o mesmo da Decision e
+  da A2B).
 
 A regra completa está em [`docs/virtual-calculation.md`](docs/virtual-calculation.md).
 
@@ -143,7 +163,7 @@ tabelas temporárias. Detalhes em [`docs/feriados.md`](docs/feriados.md).
 | Arquivo | Saída |
 |---|---|
 | [`powerbi/consulta_virtual_chamados_power_bi.m`](powerbi/consulta_virtual_chamados_power_bi.m) | consulta do relatório (Power Query M): lê os feriados do SharePoint e executa o SQL abaixo |
-| [`powerbi/consulta_virtual_chamados_power_bi.sql`](powerbi/consulta_virtual_chamados_power_bi.sql) | todos os chamados (Comercial e Corrida), com as mesmas 40 colunas da referência |
+| [`powerbi/consulta_virtual_chamados_power_bi.sql`](powerbi/consulta_virtual_chamados_power_bi.sql) | todos os chamados (Horário TCU e 24x7), com as mesmas 42 colunas da referência |
 
 Substitui as antigas `Chamados_TCU` e `Chamados_24x7`, que eram a mesma consulta
 com filtros opostos. A migração do PBIX (uma vez) está em
@@ -186,8 +206,9 @@ falhas, Power BI/SharePoint, privacidade e gateway em
    conferência*).
 
 O total de FAIA ou FARC de um período é a soma de `Indice FAIA` ou
-`Indice FARC` do resultado, Comercial e Corrida juntos (ver
-`docs/virtual-calculation.md`, seção 9).
+`Indice FARC` do resultado, Horário TCU e 24x7 juntos, por item contratual
+quando o item puder ser identificado (ver `docs/virtual-calculation.md`,
+seções 9 e 11).
 
 ## Análise e conferência
 
