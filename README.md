@@ -46,7 +46,7 @@ próprios.
 │   └── feriados.ps1                                leitura e validação do calendário (uso interno)
 ├── docs/
 │   ├── virtual-calculation.md                      regras de cálculo e rastreabilidade
-│   └── feriados.txt                                calendário de feriados e pontos facultativos (igual em todos os repositórios)
+│   └── feriados.txt                                calendário de feriados e pontos facultativos (igual na Virtual TI, Decision e A2B)
 ├── project-context/
 │   └── VIRTUAL-HISTORICO-CONTEXTO-MESTRE.md        contexto de manutenção
 ├── support/                                        consultas auxiliares de investigação
@@ -179,8 +179,8 @@ arquivo.
 
 Para incluir um feriado: editar o `feriados.txt` no SharePoint e salvar; a
 próxima atualização do relatório já usa a lista nova, sem mudar o SQL nem
-republicar. Manter igual o `docs/feriados.txt` de todos os repositórios
-(Virtual TI, Decision, A2B e COI) e a cópia em
+republicar. Manter igual o `docs/feriados.txt` dos repositórios
+Virtual TI, Decision e A2B e a cópia em
 `Documentos e Relatórios/feriados.txt`, e conferir com
 `tools/verificar_feriados.ps1`.
 
