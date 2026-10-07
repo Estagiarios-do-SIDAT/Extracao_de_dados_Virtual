@@ -840,3 +840,58 @@ Na Virtual, 206 h das 468 h em `Aguarda atendimento` são fila antes do primeiro
 atendimento (289 chamados), já cobrada no `Tini`/FAIA. Nenhum outro status
 `hold = 0` do chamado ocorre nas populações. Lista de ativos mantida: `FIP`,
 `OP`, `REAB`.
+
+### 2026-10-07 — consulta única com `Tipo SLA` e colunas no padrão da Decision
+
+Pedido: uma só consulta/tabela da Virtual no Power BI, com uma coluna de regime
+de SLA, e as colunas informativas da Decision (Categoria, Resumo, Responsável
+Abertura, Responsável Atendimento, Responsável Resolução, Severidade, Status,
+Meta Primeiro Atendimento, Meta Atendimento).
+
+Regime. O bloco [1] tem um único regime por Tipo + Prioridade (P1/P2 `24x7`,
+P3 a P5 `TCU`), e o motor usa esse regime nos dois marcos: `base_resp` e
+`base_sol` do bloco [11], e o zero das horas comerciais do bloco [10]. Não há
+chamado com início corrido e resolução comercial; uma coluna basta. É a mesma
+regra da A2B (P1/P2 corrida, P3-P5 comercial, início e resolução). Nome
+escolhido: `Tipo SLA`, com `Corrida` (antigo 24x7) e `Comercial` (antigo TCU);
+`N/A` para chamado sem linha de parâmetro (antes caía em `Chamados_TCU` pelo
+`ELSE`; nenhum nas populações). `Tipo` sozinho confundiria com
+`Tipo (Incidente/Solicitação)`.
+
+Unificação. `Chamados_TCU` e `Chamados_24x7` eram o mesmo arquivo com o filtro
+`Aba` invertido; a coluna `Aba` saiu do motor e a saída final virou um
+`SELECT` único. Arquivos antigos removidos (sem dois motores paralelos);
+`powerbi/consulta_virtual_chamados_power_bi.sql` é o novo. A referência também
+passou a devolver um resultado só. SHA256 do motor:
+`b24ee071100368f478a5ca23c21325a23df5f9d8f6f400e261438d8b98a20688`.
+
+Colunas (sem duplicar):
+
+| Pedida | Virtual antes | Ação |
+|---|---|---|
+| Categoria, Status, Responsável Abertura, Responsável Atendimento, Meta Primeiro Atendimento, Meta Atendimento | já existiam, com a definição da Decision | mantidas |
+| Resumo | `Descrição do Chamado` (mesmo `call_req.summary`) | renomeada |
+| Severidade | `Prioridade` (número) | renomeada, com o rótulo da Decision (`3 - Média`). Na Decision, `TRY_CONVERT(tinyint, pri.sym)` não converte `3 - Média`, e o valor vem de `call_req.priority` 1 a 5, o mesmo campo da Virtual |
+| Tipo SLA | `Regime` (`24x7`/`TCU`) | renomeada, com `Corrida`/`Comercial` |
+| Responsável Resolução | — | **não criada**: a Decision não tem essa coluna (nem a A2B nem o COI); criar seria inventar a regra |
+
+`chave` ficou como estava (`Incidente|3|TCU`), para não quebrar relação no
+PBIX.
+
+Regressão (mesmo instante, consultas antigas x nova):
+
+| Modo | TCU | 24x7 | Em comum | Nova | Duplicados | Diferenças (40 colunas, após o mapeamento de nomes) |
+|---|---|---|---|---|---|---|
+| FECHAMENTO | 264 | 12 | 0 | 276 | 0 | 0 |
+| RESOLUCAO | 281 | 12 | 0 | 293 | 0 | 0 |
+| referência maio/2026 | 19 | 0 | 0 | 19 | 0 | 0 |
+| referência 01/10/2025 a 07/10/2026 | 264 | 12 | 0 | 276 | 0 | 0 |
+
+24x7 → `Corrida` em 12 de 12; TCU → `Comercial` em 264 de 264 (281 de 281).
+Severidade × Tipo SLA: Incidente 1/2 `Corrida` (5/7), Incidente 3 `Comercial`
+(18), Solicitação 3/4/5 `Comercial` (230/6/10). As nove colunas pedidas (menos
+Responsável Resolução) e `Tipo SLA` estão 100% preenchidas, sem `N/A`. Auditoria
+manual de 12 chamados contra `call_req`, `pri`, `cr_stat`, `prob_ctg` e
+`ca_contact` (P1 1654284 e 1682345, P2 1647146 e 1667617, P3 1645571 e
+1644896, P4 1650824 e 1662379, P5 1647183 e 1655273, reabertura 1660920,
+transferência 1646289): tudo confere. PBI = referência na janela de 12 meses.

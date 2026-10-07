@@ -15,7 +15,7 @@ consulta. Não há dependência de arquivo externo.
 
 1. [Saída](#1-saída)
 2. [Escopo e período](#2-escopo-e-período)
-3. [TCU x 24x7](#3-tcu-x-24x7)
+3. [Tipo SLA: Corrida x Comercial](#3-tipo-sla-corrida-x-comercial)
 4. [Marcos temporais](#4-marcos-temporais)
 5. [Calendário](#5-calendário)
 6. [Parâmetros](#6-parâmetros)
@@ -28,12 +28,10 @@ consulta. Não há dependência de arquivo externo.
 
 ## 1. Saída
 
-Uma execução devolve **dois resultados**, com as mesmas 40 colunas:
-
-| Resultado | Conteúdo |
-|---|---|
-| 1 | `Chamados_TCU` — todos os chamados elegíveis do regime TCU |
-| 2 | `Chamados_24x7` — todos os chamados elegíveis do regime 24x7 |
+Uma execução devolve **um resultado**, com 40 colunas: todos os chamados
+elegíveis, Comercial e Corrida juntos. A coluna `Tipo SLA` diz o regime de cada
+chamado (seção 3). Até 2026-10-06 eram dois resultados, `Chamados_TCU` e
+`Chamados_24x7`, com as mesmas colunas.
 
 Parâmetros, no topo do arquivo:
 
@@ -55,10 +53,9 @@ Uma linha por chamado. As colunas vêm em três blocos (lista completa na seçã
 | C — contexto no padrão da Decision | 25 a 37: `Status` até `Meta Atendimento` |
 | D — grupo, agendamento e encerramento | 38: `Grupo`; 39: `Indicador de Agendamento`; 40: `Data de Encerramento Virtual` |
 
-Os chamados vêm todos juntos, separados só pelo regime. Para distinguir o
+Os chamados vêm todos juntos; `Tipo SLA` separa os regimes. Para distinguir o
 serviço ou o objeto atendido, use os dados do próprio chamado:
-`Item de Configuração`, `Categoria`, `Descrição do Chamado`, `Status` e os
-responsáveis.
+`Item de Configuração`, `Categoria`, `Resumo`, `Status` e os responsáveis.
 
 ## 2. Escopo e período
 
@@ -129,19 +126,36 @@ Exemplos:
 grupo é a Virtual; sem nenhuma transferência de grupo, vale o grupo atual. É o
 caso, por exemplo, de rotinas registradas pela automação direto na fila.
 
-## 3. TCU x 24x7
+## 3. Tipo SLA: Corrida x Comercial
 
 O regime vem dos parâmetros da Virtual (seção 6), pela combinação
-**Tipo + Prioridade**:
+**Tipo + Prioridade**, e sai na coluna `Tipo SLA`:
 
 | | P1 | P2 | P3 | P4 | P5 |
 |---|---|---|---|---|---|
-| Incidente | 24x7 | 24x7 | TCU | TCU | — |
-| Solicitação | 24x7 | 24x7 | TCU | TCU | TCU |
+| Incidente | Corrida | Corrida | Comercial | Comercial | — |
+| Solicitação | Corrida | Corrida | Comercial | Comercial | Comercial |
 
-O regime não é informado em nenhum campo do SDM. Regime `24x7` vai para o
-resultado `Chamados_24x7`; os demais vão para `Chamados_TCU`. A prioridade é a
-do chamado no momento da consulta (`call_req.priority`, 1 a 5).
+| `Tipo SLA` | Código interno (bloco [1], `chave`) | Tini e Excesso Resposta | Tsol e Excesso Resolução |
+|---|---|---|---|
+| `Corrida` | `24x7` | tempo corrido | tempo corrido |
+| `Comercial` | `TCU` | horas comerciais | horas comerciais |
+| `N/A` | sem linha de parâmetro | sem meta | sem meta |
+
+- **Um regime por chamado.** O bloco [1] tem um único regime por Tipo +
+  Prioridade, e o motor usa esse mesmo regime no primeiro atendimento e na
+  resolução (bloco [11]). Não existe chamado com início corrido e resolução
+  comercial, nem o contrário; por isso basta uma coluna.
+- **Mesma regra da A2B.** P1 e P2 corridos, P3 a P5 comerciais, nos dois
+  marcos. Na A2B a coluna se chama `Tipo`; aqui `Tipo SLA`, para não confundir
+  com `Tipo (Incidente/Solicitação)`.
+- O regime não é informado em nenhum campo do SDM. A prioridade é a do chamado
+  no momento da consulta (`call_req.priority`, 1 a 5).
+- Até 2026-10-06 os regimes saíam em resultados separados: `24x7` em
+  `Chamados_24x7` e os demais em `Chamados_TCU`. A unificação foi conferida
+  chamado a chamado: nenhum chamado nas duas, todos os de `Chamados_24x7`
+  como `Corrida`, todos os de `Chamados_TCU` como `Comercial` e as mesmas
+  métricas.
 
 ## 4. Marcos temporais
 
@@ -279,8 +293,9 @@ As **metas** são buscadas por Tipo + Prioridade; os **fatores**, pela `chave`
 `Tipo|Prioridade|Regime`. Como o regime vem da mesma linha, as duas buscas
 apontam para a mesma linha.
 
-Chamado sem linha de parâmetro (Incidente P5, prioridade não informada) sai em
-`Chamados_TCU`, com regime, metas, fatores e índices vazios.
+Chamado sem linha de parâmetro (Incidente P5, prioridade não informada) sai com
+`Tipo SLA` = `N/A` e metas, fatores e índices vazios. Até 2026-10-06 ele caía em
+`Chamados_TCU`. Nenhum chamado das populações publicadas está nesse caso.
 
 ## 7. Cálculo por chamado
 
@@ -393,7 +408,7 @@ segundos com dois dígitos, zero como `0:00:00`. O cálculo é todo feito em
 excessos e índices. Fatores e índices saem como números e nunca são calculados
 a partir do texto.
 
-| Coluna | TCU | 24x7 |
+| Coluna | Comercial (TCU) | Corrida (24x7) |
 |---|---|---|
 | `Tini (h)` | tempo corrido nas janelas de posse até o Início, em qualquer status | igual |
 | `Tsol (h)` | tempo corrido nas janelas de posse até a Resolução, só em status ativo (7.2) | igual |
@@ -481,10 +496,10 @@ Diferenças em relação à Decision:
 | # | Campo final | Origem | Regra |
 |---|---|---|---|
 | 1 | ID Chamado | `call_req.ref_num` | — |
-| 2 | Descrição do Chamado | `call_req.summary` | resumo atual |
+| 2 | Resumo | `call_req.summary` | resumo atual, sem espaços nas pontas (antiga `Descrição do Chamado`) |
 | 3 | Tipo (Incidente/Solicitação) | `call_req.type` | I → Incidente, R → Solicitação |
-| 4 | Prioridade | `call_req.priority` | 1 a 5 |
-| 5 | Regime | parâmetros | por Tipo + Prioridade; define o resultado |
+| 4 | Severidade | `call_req.priority` | `1 - Máxima`, `2 - Alta`, `3 - Média`, `4 - Baixa`, `5 - Mínima`; fora de 1 a 5, `NãoInformada` (antiga `Prioridade`, numérica) |
+| 5 | Tipo SLA | parâmetros | `Corrida` / `Comercial` / `N/A`, por Tipo + Prioridade (antiga `Regime`, com `24x7` / `TCU`) |
 | 6 | Data/Hora Abertura | `open_date` | seção 4 |
 | 7 | Data/Hora Início Atendimento | `act_log`: 1º `Em andamento` dentro da posse; senão 1ª atividade na posse; senão a entrada | seção 4 |
 | 8 | Data/Hora Resolução | `resolve_date` / último RE | seção 4; define o período com `RESOLUCAO` |
@@ -499,7 +514,7 @@ Diferenças em relação à Decision:
 | 17 | Meta Resolução (h) | parâmetros | Tipo + Prioridade |
 | 18 | Excesso Resposta (h) | 12 (TCU) ou 10 (24x7) − 16 | mín. 0 |
 | 19 | Excesso Resolução (h) | 14 (TCU) ou 11 (24x7) − 17 | mín. 0 |
-| 20 | chave | 3, 4, 5 | `Tipo\|Prioridade\|Regime` |
+| 20 | chave | 3, prioridade, regime interno | `Tipo\|Prioridade\|Regime`, com a prioridade numérica e o regime `24x7`/`TCU` (inalterada) |
 | 21 | Fator FARC | parâmetros | pela chave |
 | 22 | Indice FARC | 19 × 21 | pontos percentuais |
 | 23 | Fator FAIA | parâmetros | pela chave |
@@ -521,11 +536,32 @@ Diferenças em relação à Decision:
 | 39 | Indicador de Agendamento | `act_log`: transição com destino `Agendado` dentro da posse | `Sim` / `Não` (seção 7.4) |
 | 40 | Data de Encerramento Virtual | `act_log`: último encerramento dentro da posse (entrada em `Em homologação` ou `SOLN`) | data e hora; vazia sem evento válido (seção 4) |
 
+### 8.1 Colunas no padrão da Decision
+
+As colunas de contexto têm o mesmo nome e a mesma definição das colunas da
+Decision (`Extracao_de_dados_Decision`, consulta do Power BI):
+
+| Coluna | Decision | Virtual |
+|---|---|---|
+| `Categoria` | `prob_ctg.sym`; `N/A` sem categoria | igual |
+| `Resumo` | `call_req.summary`, sem espaços nas pontas | igual (antes `Descrição do Chamado`) |
+| `Responsável Abertura` | `call_req.log_agent` → `ca_contact`: nome; senão userid; senão `N/A` | igual |
+| `Responsável Atendimento` | `call_req.assignee` → `ca_contact`, mesma regra | igual |
+| `Severidade` | rótulo da prioridade (`1 - Máxima` ... `5 - Mínima`; senão `NãoInformada`) | igual (antes `Prioridade`, numérica) |
+| `Status` | `cr_stat.sym` do status atual; `N/A` sem cadastro | igual |
+| `Meta Primeiro Atendimento` | `Não Atende` se há excesso no primeiro atendimento, `Atende` se não, `N/A` sem valor | igual, sobre `Excesso Resposta` |
+| `Meta Atendimento` | o mesmo, sobre o excesso do atendimento | igual, sobre `Excesso Resolução` |
+
+A Decision **não tem** coluna `Responsável Resolução`, e nenhuma consulta dos
+projetos tem. Ela não foi criada na Virtual: sem uma definição de referência,
+uma coluna com esse nome seria uma regra nova, e não o alinhamento com a
+Decision.
+
 ## 9. Totais
 
 Os índices são pontos percentuais por chamado. O total de FAIA de um período é
-a soma de `Indice FAIA` dos dois resultados; o de FARC, a soma de
-`Indice FARC`. A aplicação desse percentual sobre valores de contrato não faz
+a soma de `Indice FAIA` do resultado, Comercial e Corrida juntos; o de FARC, a
+soma de `Indice FARC`. A aplicação desse percentual sobre valores de contrato não faz
 parte da consulta.
 
 ## 10. Cuidados e limitações
@@ -533,7 +569,7 @@ parte da consulta.
 - **O calendário precisa ser atualizado a cada ano.** Ele cobre 01/01/2025 a
   31/12/2026. As datas ficam no bloco `[2]` do motor, tabela `#Virt_Calendario`,
   em `queries/consulta_virtual_faia_farc.sql`. Inclua as datas do ano novo
-  nesse bloco e copie o bloco para os dois arquivos de `powerbi/` (ver
+  nesse bloco e copie o bloco para o arquivo de `powerbi/` (ver
   `docs/powerbi-query.md`, seção 2). Sem isso, os feriados do ano novo não são
   descontados.
 - Identidade do grupo por UUID: `Fornecedores - Virtual`

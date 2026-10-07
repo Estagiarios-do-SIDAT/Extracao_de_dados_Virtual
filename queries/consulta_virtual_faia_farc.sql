@@ -7,13 +7,15 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 --
 -- Apuracao do fornecedor Virtual a partir do SDM, com a mesma arquitetura de
 -- posse da Decision (Extracao_de_dados_Decision) e os parametros, o calendario
--- e o horario comercial proprios da Virtual. Devolve DOIS result sets:
+-- e o horario comercial proprios da Virtual. Devolve UM result set com todos
+-- os chamados elegiveis; a coluna [Tipo SLA] diz o regime de cada um:
 --
---   Resultado 1 = Chamados_TCU
---   Resultado 2 = Chamados_24x7
+--   Corrida   = P1 e P2 (antigo regime 24x7): tempo corrido, 24 h por dia;
+--   Comercial = P3 a P5 (antigo regime TCU): seg-sex, 08:00-20:00, sem
+--               feriados e pontos facultativos.
 --
--- Uma execucao devolve todos os chamados elegiveis: o Resultado 1 traz os do
--- regime TCU e o Resultado 2 os do regime 24x7.
+-- O mesmo regime vale para o primeiro atendimento (Tini) e para a resolucao
+-- (Tsol): ha um unico regime por Tipo + Prioridade (bloco [1]).
 --
 -- Regras (detalhe em docs/virtual-calculation.md):
 --   Periodo     data escolhida em @DataReferencia dentro de
@@ -66,7 +68,7 @@ DECLARE @DataFim    datetime2(0) = '2026-06-01 00:00:00';
 DECLARE @DataReferencia nvarchar(20) = N'FECHAMENTO';
 
 -- >>> MOTOR VIRTUAL ------------------------------------------------------------
--- Bloco identico nos tres arquivos (queries/ e powerbi/). Usa so @DataInicio,
+-- Bloco identico nos dois arquivos (queries/ e powerbi/). Usa so @DataInicio,
 -- @DataFim e @DataReferencia e entrega #Virt_Saida com os dois regimes.
 
 IF @DataReferencia IS NULL OR @DataReferencia NOT IN (N'RESOLUCAO', N'FECHAMENTO')
@@ -897,19 +899,34 @@ CREATE UNIQUE CLUSTERED INDEX IX_Virt_Calculo ON #Virt_Calculo (id);
 -- [12] Linhas finais.
 --      Bloco A: identificacao e datas. Bloco B: as 15 colunas de apuracao da
 --      Virtual. Bloco C: colunas de contexto no padrao da Decision.
+--      [Resumo], [Severidade] e [Tipo SLA] seguem a Decision: Resumo =
+--      call_req.summary; Severidade = rotulo da prioridade ('3 - Média'), como
+--      a coluna Severidade da Decision; Tipo SLA = regime do bloco [1] (24x7 =
+--      Corrida, TCU = Comercial; sem regra de SLA = N/A). [chave] mantem o
+--      codigo interno do regime (24x7/TCU).
 --      As duracoes saem como texto [h]:mm:ss (horas acima de 24 sem virar o
 --      dia). A formatacao e feita so aqui, depois do
 --      calculo; fatores e indices continuam numericos.
 --------------------------------------------------------------------------------
 IF OBJECT_ID('tempdb..#Virt_Saida') IS NOT NULL DROP TABLE #Virt_Saida;
 SELECT
-    CASE WHEN m.regime = N'24x7' THEN N'Chamados_24x7' ELSE N'Chamados_TCU' END AS Aba,
     -- Bloco A
     m.ref_num AS [ID Chamado],
-    m.resumo AS [Descrição do Chamado],
+    m.resumo AS [Resumo],
     m.tipo AS [Tipo (Incidente/Solicitação)],
-    m.prioridade AS [Prioridade],
-    m.regime AS [Regime],
+    CASE m.prioridade
+        WHEN 1 THEN N'1 - Máxima'
+        WHEN 2 THEN N'2 - Alta'
+        WHEN 3 THEN N'3 - Média'
+        WHEN 4 THEN N'4 - Baixa'
+        WHEN 5 THEN N'5 - Mínima'
+        ELSE N'NãoInformada'
+    END AS [Severidade],
+    CASE m.regime
+        WHEN N'24x7' THEN N'Corrida'
+        WHEN N'TCU'  THEN N'Comercial'
+        ELSE N'N/A'
+    END AS [Tipo SLA],
     m.abertura AS [Data/Hora Abertura],
     m.inicio AS [Data/Hora Início Atendimento],
     m.resolucao AS [Data/Hora Resolução],
@@ -1055,14 +1072,14 @@ CROSS APPLY (
 -- <<< MOTOR VIRTUAL ------------------------------------------------------------
 
 --------------------------------------------------------------------------------
--- Resultado 1 = Chamados_TCU
+-- Resultado unico: Comercial e Corrida juntos; [Tipo SLA] separa os regimes.
 --------------------------------------------------------------------------------
 SELECT
     [ID Chamado],
-    [Descrição do Chamado],
+    [Resumo],
     [Tipo (Incidente/Solicitação)],
-    [Prioridade],
-    [Regime],
+    [Severidade],
+    [Tipo SLA],
     [Data/Hora Abertura],
     [Data/Hora Início Atendimento],
     [Data/Hora Resolução],
@@ -1099,53 +1116,4 @@ SELECT
     [Indicador de Agendamento],
     [Data de Encerramento Virtual]
 FROM #Virt_Saida
-WHERE Aba = N'Chamados_TCU'
-ORDER BY [Data/Hora Fechamento], [ID Chamado];
-
---------------------------------------------------------------------------------
--- Resultado 2 = Chamados_24x7
---------------------------------------------------------------------------------
-SELECT
-    [ID Chamado],
-    [Descrição do Chamado],
-    [Tipo (Incidente/Solicitação)],
-    [Prioridade],
-    [Regime],
-    [Data/Hora Abertura],
-    [Data/Hora Início Atendimento],
-    [Data/Hora Resolução],
-    [Data/Hora Fechamento],
-    [Tini (h)],
-    [Tsol (h)],
-    [Horas Comerciais Resposta (h)],
-    [Horas Não Comerciais Resposta (h)],
-    [Horas Comerciais Resolução (h)],
-    [Horas Não Comerciais Resolução (h)],
-    [Meta Resposta (h)],
-    [Meta Resolução (h)],
-    [Excesso Resposta (h)],
-    [Excesso Resolução (h)],
-    [chave],
-    [Fator FARC],
-    [Indice FARC],
-    [Fator FAIA],
-    [Indice FAIA],
-    [Status],
-    [Categoria],
-    [Responsável Abertura],
-    [Responsável Atendimento],
-    [Item de Configuração],
-    [Data Entrada Grupo Virtual],
-    [Tempo suspenso],
-    [Meta Primeiro Atendimento],
-    [Indicador Reabertura],
-    [Acordo Prazo],
-    [Acordo Qualidade],
-    [Justificativa],
-    [Meta Atendimento],
-    [Grupo],
-    [Indicador de Agendamento],
-    [Data de Encerramento Virtual]
-FROM #Virt_Saida
-WHERE Aba = N'Chamados_24x7'
 ORDER BY [Data/Hora Fechamento], [ID Chamado];

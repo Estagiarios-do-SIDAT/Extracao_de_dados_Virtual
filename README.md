@@ -3,10 +3,11 @@
 Consultas SQL e documentação da apuração de **FAIA** e **FARC** do fornecedor
 **Virtual**, a partir da base do **CA Service Desk Manager** (`mdb`).
 
-A consulta lê só o SDM e entrega os chamados da Virtual em duas grades, por
-regime: `Chamados_TCU` e `Chamados_24x7`. A contagem de tempo segue a
-arquitetura de posse da Decision; metas, fatores, regime e calendário são os da
-Virtual e ficam no próprio SQL. Não há dependência de arquivo externo.
+A consulta lê só o SDM e entrega os chamados da Virtual numa **única tabela**,
+com a coluna `Tipo SLA` (`Corrida` ou `Comercial`) dizendo o regime de cada
+chamado. A contagem de tempo segue a arquitetura de posse da Decision; metas,
+fatores, regime e calendário são os da Virtual e ficam no próprio SQL. Não há
+dependência de arquivo externo.
 
 Este repositório atende **somente a Virtual**. Decision, A2B/Protect4 e COI têm
 repositórios próprios.
@@ -20,8 +21,7 @@ repositórios próprios.
 ├── queries/
 │   └── consulta_virtual_faia_farc.sql              consulta de referência
 ├── powerbi/
-│   ├── consulta_virtual_chamados_tcu_power_bi.sql  aba Chamados_TCU
-│   └── consulta_virtual_chamados_24x7_power_bi.sql aba Chamados_24x7
+│   └── consulta_virtual_chamados_power_bi.sql      consulta do Power BI (Comercial e Corrida)
 ├── docs/
 │   ├── virtual-calculation.md                      regras de cálculo
 │   └── powerbi-query.md                            consultas do Power BI
@@ -34,12 +34,13 @@ repositórios próprios.
 ## Consulta de referência
 
 [`queries/consulta_virtual_faia_farc.sql`](queries/consulta_virtual_faia_farc.sql)
-devolve dois resultados, com as mesmas 40 colunas:
+devolve **um resultado**, com 40 colunas e uma linha por chamado. A coluna
+`Tipo SLA` separa os regimes:
 
-| Resultado | Conteúdo |
-|---|---|
-| 1 | `Chamados_TCU`: todos os chamados elegíveis do regime TCU |
-| 2 | `Chamados_24x7`: todos os chamados elegíveis do regime 24x7 |
+| Tipo SLA | Severidades | Contagem (primeiro atendimento e resolução) |
+|---|---|---|
+| `Corrida` | P1 e P2 (antigo regime 24x7) | tempo corrido, 24 h por dia |
+| `Comercial` | P3, P4 e P5 (antigo regime TCU) | segunda a sexta, 08:00–20:00, sem feriados e pontos facultativos |
 
 Parâmetros no topo do arquivo:
 
@@ -69,7 +70,9 @@ Em resumo:
   foi uma entrada na Virtual, ou nasceram nela sem transferência). Ter passado
   pela Virtual não basta. Em `RESOLUCAO`: resolvidos dentro de uma
   janela de posse da Virtual, fechados ou não.
-- **Regime:** TCU ou 24x7, pela combinação Tipo + Prioridade.
+- **Tipo SLA:** `Corrida` (antigo 24x7) ou `Comercial` (antigo TCU), pela
+  combinação Tipo + Prioridade. O mesmo regime vale para o primeiro atendimento
+  e para a resolução.
 - **Posse:** o relógio começa na primeira entrada na Virtual (na abertura, se
   o chamado nasceu nela), para nas saídas e volta nas reentradas; todas as
   janelas de posse são somadas.
@@ -84,8 +87,9 @@ Em resumo:
   Atendimento Excedido e ao Tempo Atendimento Excedido da Decision.
 - **Colunas:** identificação e datas (com `Data/Hora Fechamento`), as 15
   colunas de apuração da Virtual e colunas de contexto no padrão da Decision,
-  entre elas `Item de Configuração` e `Categoria`, que identificam o serviço ou
-  o objeto atendido. `Grupo` (coluna 38) é o grupo do chamado no instante de
+  entre elas `Resumo`, `Severidade`, `Status`, `Categoria`, os responsáveis
+  pela abertura e pelo atendimento, as metas e `Item de Configuração`, com a
+  mesma definição das colunas de mesmo nome da Decision. `Grupo` (coluna 38) é o grupo do chamado no instante de
   referência, pelo histórico de transferências: no fechamento (`FECHAMENTO`) ou
   na resolução (`RESOLUCAO`).
   `Tempo suspenso` é o tempo de posse até a resolução em status que pausam;
@@ -103,7 +107,7 @@ Em resumo:
   reabertura, vale o encerramento do último ciclo. Vazia quando não há esse
   evento. Não é o fechamento (`close_date`) nem substitui a
   `Data/Hora Resolução`, que continua sendo o marco dos tempos.
-- **Horário comercial (TCU):** 08:00–20:00, segunda a sexta, fora do
+- **Horário comercial (`Comercial`):** 08:00–20:00, segunda a sexta, fora do
   calendário TCU.
 
 A regra completa está em [`docs/virtual-calculation.md`](docs/virtual-calculation.md).
@@ -115,23 +119,26 @@ temporárias.
 
 | Arquivo | Saída |
 |---|---|
-| [`powerbi/consulta_virtual_chamados_tcu_power_bi.sql`](powerbi/consulta_virtual_chamados_tcu_power_bi.sql) | `Chamados_TCU`, com as mesmas 40 colunas da referência |
-| [`powerbi/consulta_virtual_chamados_24x7_power_bi.sql`](powerbi/consulta_virtual_chamados_24x7_power_bi.sql) | `Chamados_24x7`, com as mesmas 40 colunas da referência |
+| [`powerbi/consulta_virtual_chamados_power_bi.sql`](powerbi/consulta_virtual_chamados_power_bi.sql) | todos os chamados (Comercial e Corrida), com as mesmas 40 colunas da referência |
+
+Substitui as antigas `Chamados_TCU` e `Chamados_24x7`, que eram a mesma consulta
+com filtros opostos. A migração do PBIX (uma vez) está em
+[`docs/powerbi-query.md`](docs/powerbi-query.md#7-migração-de-chamados_tcu-e-chamados_24x7).
 
 O período é automático: os últimos `@CoberturaMeses` meses (padrão **12**) mais
 o mês corrente, pela data escolhida em `@DataReferencia` (padrão `FECHAMENTO`),
-declarada no topo de cada arquivo.
+declarada no topo do arquivo.
 
-O bloco de cálculo (`MOTOR VIRTUAL`) é idêntico nos três arquivos. Mudanças de
-regra são feitas na referência e copiadas para os dois arquivos do Power BI.
-Detalhes em [`docs/powerbi-query.md`](docs/powerbi-query.md).
+O bloco de cálculo (`MOTOR VIRTUAL`) é idêntico na referência e no Power BI.
+Mudanças de regra são feitas na referência e copiadas para o arquivo do Power
+BI. Detalhes em [`docs/powerbi-query.md`](docs/powerbi-query.md).
 
 ## Manutenção anual
 
 O calendário TCU (feriados e pontos facultativos) fica no bloco `[2]` do motor,
 tabela `#Virt_Calendario`, e hoje cobre **2025 e 2026**. A cada ano novo, inclua
-as datas do ano no bloco da referência e copie o bloco para os dois arquivos do
-Power BI.
+as datas do ano no bloco da referência e copie o bloco para o arquivo do Power
+BI.
 
 ## Como validar
 
@@ -140,14 +147,15 @@ Power BI.
    resolução, fechamento) e as janelas de posse contra o `act_log` do chamado.
    A consulta `support/consulta_logs_chamados_listados.sql` lista todos os
    logs dos SDMs informados.
-3. Para o Power BI, rode as duas consultas com o mesmo período da referência.
-   Elas devem ter as mesmas linhas e os mesmos valores dos dois resultados.
+3. Para o Power BI, rode a consulta com o mesmo período da referência. Ela
+   deve ter as mesmas linhas e os mesmos valores.
 4. Para reconciliar com o relatório da Virtual, use
    `analysis/virtual-query-report-analysis.xlsx` (seção *Análise e
    conferência*).
 
 O total de FAIA ou FARC de um período é a soma de `Indice FAIA` ou
-`Indice FARC` dos dois resultados (ver `docs/virtual-calculation.md`, seção 9).
+`Indice FARC` do resultado, Comercial e Corrida juntos (ver
+`docs/virtual-calculation.md`, seção 9).
 
 ## Análise e conferência
 

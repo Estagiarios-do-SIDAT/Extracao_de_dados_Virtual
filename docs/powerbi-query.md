@@ -1,23 +1,25 @@
-# Consultas do Power BI — Virtual
+# Consulta do Power BI — Virtual
 
 Fonte de dados do painel de FAIA e FARC da Virtual. A regra de cálculo está em
 [virtual-calculation.md](virtual-calculation.md).
 
 ---
 
-## 1. Arquivos
+## 1. Arquivo
 
 | Arquivo | Conteúdo |
 |---|---|
-| `powerbi/consulta_virtual_chamados_tcu_power_bi.sql` | `Chamados_TCU`: todos os chamados elegíveis do regime TCU |
-| `powerbi/consulta_virtual_chamados_24x7_power_bi.sql` | `Chamados_24x7`: todos os chamados elegíveis do regime 24x7 |
+| `powerbi/consulta_virtual_chamados_power_bi.sql` | todos os chamados elegíveis da Virtual, Comercial e Corrida juntos; a coluna `Tipo SLA` separa os regimes |
 
-Cada arquivo devolve **um único resultado**, como o Power BI espera.
+O arquivo devolve **um único resultado**, como o Power BI espera. Ele substitui
+as antigas `consulta_virtual_chamados_tcu_power_bi.sql` (`Chamados_TCU`) e
+`consulta_virtual_chamados_24x7_power_bi.sql` (`Chamados_24x7`), removidas do
+repositório: eram o mesmo motor com filtros opostos no regime (seção 7).
 
 ## 2. Mesmo motor da consulta de referência
 
 A referência é [`queries/consulta_virtual_faia_farc.sql`](../queries/consulta_virtual_faia_farc.sql).
-Os três arquivos têm o mesmo bloco de cálculo, delimitado por:
+Os dois arquivos têm o mesmo bloco de cálculo, delimitado por:
 
 ```text
 -- >>> MOTOR VIRTUAL
@@ -25,25 +27,26 @@ Os três arquivos têm o mesmo bloco de cálculo, delimitado por:
 -- <<< MOTOR VIRTUAL
 ```
 
-O bloco é **idêntico byte a byte** nos três arquivos. SHA256 do bloco, com fim de
+O bloco é **idêntico byte a byte** nos dois arquivos. SHA256 do bloco, com fim de
 linha LF:
 
 ```text
-b53862ecf92e6f5703ed953ead8506dadad9a78f01296b3e1db41f4341bd228d
+b24ee071100368f478a5ca23c21325a23df5f9d8f6f400e261438d8b98a20688
 ```
 
 Ele recebe só `@DataInicio`, `@DataFim` e `@DataReferencia` e entrega a
-tabela `#Virt_Saida`, com os dois regimes. Os arquivos diferem apenas em:
+tabela `#Virt_Saida`, com os dois regimes. Os arquivos diferem apenas no
+período:
 
 | | Referência | Power BI |
 |---|---|---|
 | Período | `@DataInicio` / `@DataFim` digitados | calculado a partir de hoje (seção 4) |
-| Saída | dois resultados (TCU e 24x7) | um arquivo por regime |
+| Saída | um resultado, Comercial e Corrida | igual |
 
-As três consultas têm as mesmas 40 colunas, na mesma ordem.
+As duas consultas têm as mesmas 40 colunas, na mesma ordem.
 
-Qualquer mudança de regra é feita no bloco da referência e copiada para os dois
-arquivos do Power BI. Depois da cópia, os três blocos devem continuar idênticos.
+Qualquer mudança de regra é feita no bloco da referência e copiada para o
+arquivo do Power BI. Depois da cópia, os dois blocos devem continuar idênticos.
 
 ## 3. Como usar no Power BI
 
@@ -51,11 +54,13 @@ arquivos do Power BI. Depois da cópia, os três blocos devem continuar idêntic
 2. Servidor do SDM, banco `mdb`, modo **Importação**.
 3. Em *Opções avançadas → Instrução SQL*, colar o arquivo **inteiro**.
 4. Deixar *Incluir colunas de relação* desmarcado.
-5. Repetir para o outro arquivo. São duas consultas no modelo, uma por regime.
+
+É uma consulta só no modelo. Para separar os regimes no relatório, filtre pela
+coluna `Tipo SLA`.
 
 ## 4. Período
 
-No topo de cada arquivo:
+No topo do arquivo:
 
 ```sql
 DECLARE @CoberturaMeses int = 12;
@@ -79,17 +84,17 @@ Regra completa em
 [virtual-calculation.md, seção 2](virtual-calculation.md#2-escopo-e-período).
 
 A janela vai do **dia 1 do mês (corrente − `@CoberturaMeses`)** até o fim do dia
-de hoje, pela data escolhida. Com `12`, ela traz os doze meses anteriores, inteiros, e
-o mês corrente até hoje. Para outra cobertura, troque só esse número (em
-*Etapas aplicadas → Fonte*). Nenhuma regra depende dele.
+de hoje, pela data escolhida. Com `12`, ela traz os doze meses anteriores,
+inteiros, e o mês corrente até hoje. Para outra cobertura, troque só esse
+número. Nenhuma regra depende dele.
 
 Exemplo: atualizado em 15/10/2026, com `12` e `FECHAMENTO`, traz chamados
 fechados de 01/10/2025 até 15/10/2026.
 
-Volume e tempo de referência (janela de 01/10/2025 a 05/10/2026): 275 chamados
-com `FECHAMENTO` (263 TCU, 12 24x7), em 1 a 2 segundos por consulta; 293 com
-`RESOLUCAO` (281 TCU, 12 24x7), em cerca de 50 segundos na consulta TCU, porque o
-modo lê o `act_log` de todos os chamados resolvidos na janela.
+Volume de referência (janela de 01/10/2025 a 06/10/2026): 276 chamados com
+`FECHAMENTO` (264 Comercial, 12 Corrida), em cerca de 10 segundos; 293 com
+`RESOLUCAO` (281 Comercial, 12 Corrida), mais lento, porque o modo lê o
+`act_log` de todos os chamados resolvidos na janela.
 
 ## 5. Saída
 
@@ -98,10 +103,10 @@ As mesmas 40 colunas da referência, na mesma ordem:
 | # | Coluna | Unidade |
 |---|---|---|
 | 1 | ID Chamado | texto |
-| 2 | Descrição do Chamado | texto |
+| 2 | Resumo | texto (`call_req.summary`) |
 | 3 | Tipo (Incidente/Solicitação) | texto |
-| 4 | Prioridade | 1 a 5 |
-| 5 | Regime | `TCU` / `24x7` |
+| 4 | Severidade | `1 - Máxima` / `2 - Alta` / `3 - Média` / `4 - Baixa` / `5 - Mínima` / `NãoInformada` |
+| 5 | Tipo SLA | `Corrida` / `Comercial` / `N/A` |
 | 6 | Data/Hora Abertura | data e hora (Brasil) |
 | 7 | Data/Hora Início Atendimento | data e hora (Brasil) |
 | 8 | Data/Hora Resolução | data e hora (Brasil) |
@@ -116,7 +121,7 @@ As mesmas 40 colunas da referência, na mesma ordem:
 | 17 | Meta Resolução (h) | texto `[h]:mm:ss` |
 | 18 | Excesso Resposta (h) | texto `[h]:mm:ss` |
 | 19 | Excesso Resolução (h) | texto `[h]:mm:ss` |
-| 20 | chave | `Tipo\|Prioridade\|Regime` |
+| 20 | chave | `Tipo\|Prioridade\|Regime` (prioridade numérica, regime interno `24x7`/`TCU`) |
 | 21 | Fator FARC | decimal |
 | 22 | Indice FARC | pontos percentuais |
 | 23 | Fator FAIA | decimal |
@@ -139,7 +144,8 @@ As mesmas 40 colunas da referência, na mesma ordem:
 | 40 | Data de Encerramento Virtual | data e hora (Brasil): último encerramento da Virtual na posse (entrada em `Em homologação` ou `SOLN`); vazia se não houver |
 
 Uma linha por chamado. Os blocos e a origem de cada coluna estão em
-[virtual-calculation.md, seção 8](virtual-calculation.md#8-mapa-das-colunas).
+[virtual-calculation.md, seção 8](virtual-calculation.md#8-mapa-das-colunas);
+as colunas no padrão da Decision, na seção 8.1.
 
 As durações (as 10 do bloco B e `Tempo suspenso`) saem como texto
 `[h]:mm:ss`: horas sem limite
@@ -160,20 +166,18 @@ em `Tempo suspenso` (seção 7.2).
 transferências: com `FECHAMENTO`, o grupo no fechamento (sempre a Virtual,
 porque é o critério do escopo); com `RESOLUCAO`, o grupo na resolução.
 
-Os chamados vêm todos juntos. Para separar por serviço ou objeto atendido,
-use os campos do próprio chamado, como `Item de Configuração` e `Categoria`.
-Para o total de FAIA ou FARC de um mês, some `Indice FAIA` ou `Indice FARC`
-das duas consultas, filtrando o mês da data escolhida em `@DataReferencia`.
+Para separar por regime, filtre `Tipo SLA`; por serviço ou objeto atendido,
+use `Item de Configuração` e `Categoria`. Para o total de FAIA ou FARC de um
+mês, some `Indice FAIA` ou `Indice FARC`, filtrando o mês da data escolhida em
+`@DataReferencia`.
 
 ## 6. Conferência
 
-Com o mesmo período, as duas consultas do Power BI têm as mesmas linhas e os
-mesmos valores dos dois resultados da referência com a mesma
-`@DataReferencia`. Conferido em maio/2026 (19 chamados com `FECHAMENTO`, 23 com
-`RESOLUCAO`) e na janela de 12 meses até 05/10/2026 (275 com `FECHAMENTO`, 293
-com `RESOLUCAO`): nenhuma diferença nas 40 colunas. A janela do Power BI vai até
-amanhã; um chamado fechado hoje aparece nele e não numa referência que termine
-hoje à 00:00.
+Com o mesmo período, a consulta do Power BI tem as mesmas linhas e os mesmos
+valores da referência com a mesma `@DataReferencia`. Na janela de 01/10/2025 a
+07/10/2026: 276 chamados com `FECHAMENTO`, nenhuma diferença nas 40 colunas. A
+janela do Power BI vai até amanhã; um chamado fechado hoje aparece nele e não
+numa referência que termine hoje à 00:00.
 
 Para conferir, troque no arquivo do Power BI as duas linhas que calculam
 `@DataInicio` e `@DataFim` por datas fixas iguais às da referência.
@@ -182,14 +186,55 @@ A planilha `analysis/virtual-query-report-analysis.xlsx` pode ser usada para
 reconciliar os SDMs do resultado SQL com os relatórios da Virtual. Ela não
 interfere nos cálculos nem na população da consulta.
 
-## 7. Cuidados
+## 7. Migração de Chamados_TCU e Chamados_24x7
+
+Até 2026-10-06 o painel tinha duas consultas: `Chamados_TCU` (regime TCU) e
+`Chamados_24x7` (regime 24x7). Eram o mesmo motor, com o filtro final
+`Aba = 'Chamados_TCU'` ou `'Chamados_24x7'`, e cada chamado tinha um único
+regime. A consulta única devolve a **união exata** das duas.
+
+Conferência da unificação (2026-10-06, mesmas janelas, contra as consultas
+antigas):
+
+| Modo | Chamados_TCU | Chamados_24x7 | Em comum | Consulta única | Duplicados | Diferenças |
+|---|---|---|---|---|---|---|
+| `FECHAMENTO` | 264 | 12 | 0 | 276 | 0 | 0 nas 40 colunas |
+| `RESOLUCAO` | 281 | 12 | 0 | 293 | 0 | 0 nas 40 colunas |
+
+Todos os chamados de `Chamados_24x7` saem com `Tipo SLA = Corrida` e todos os
+de `Chamados_TCU` com `Tipo SLA = Comercial`. A matriz Severidade × Tipo SLA
+segue a regra (P1 e P2 `Corrida`; P3, P4 e P5 `Comercial`).
+
+Mudanças de coluna (mesma posição, mesmo conteúdo):
+
+| # | Antes | Depois | O que muda no valor |
+|---|---|---|---|
+| 2 | `Descrição do Chamado` | `Resumo` | nada (mesmo texto) |
+| 4 | `Prioridade` (número 1 a 5) | `Severidade` | rótulo da Decision: `1` → `1 - Máxima` ... `5` → `5 - Mínima` |
+| 5 | `Regime` (`24x7` / `TCU`) | `Tipo SLA` | `24x7` → `Corrida`, `TCU` → `Comercial` |
+
+Nenhuma coluna foi removida nem acrescentada; `chave` continua igual
+(`Incidente|3|TCU`). Passos no PBIX, **uma vez**:
+
+1. Criar a consulta nova com `powerbi/consulta_virtual_chamados_power_bi.sql`
+   (seção 3), chamada, por exemplo, `Chamados`.
+2. Nos visuais e medidas que usavam `Chamados_TCU` ou `Chamados_24x7`, apontar
+   para `Chamados`, com filtro `Tipo SLA = Comercial` ou `Tipo SLA = Corrida`
+   onde o visual era de um regime só.
+3. Trocar as referências às colunas renomeadas: `Descrição do Chamado` →
+   `Resumo`, `Prioridade` → `Severidade` (texto; filtros numéricos passam a
+   usar o rótulo), `Regime` → `Tipo SLA`.
+4. Excluir as consultas `Chamados_TCU` e `Chamados_24x7` do modelo.
+
+## 8. Cuidados
 
 - A consulta cria só tabelas temporárias (`#Virt_*`). Não grava nada no banco.
 - O calendário embutido vai até 31/12/2026 e precisa ser atualizado a cada ano
-  no bloco `[2]` do motor, na referência, e depois copiado para os dois
-  arquivos do Power BI (ver
+  no bloco `[2]` do motor, na referência, e depois copiado para o arquivo do
+  Power BI (ver
   [virtual-calculation.md, seção 10](virtual-calculation.md#10-cuidados-e-limitações)).
   Com a janela de 12 meses, a partir de janeiro de 2027 parte da janela fica
   fora do calendário até essa atualização.
-- Só entram chamados já fechados. Um chamado resolvido e ainda não fechado
-  aparece no mês em que for fechado.
+- Com `FECHAMENTO`, só entram chamados já fechados: um chamado resolvido e
+  ainda não fechado aparece no mês em que for fechado. Com `RESOLUCAO`, ele
+  aparece no mês da resolução.
