@@ -15,10 +15,11 @@ Apurar, direto do SDM (`mdb`), FAIA e FARC da Virtual em duas grades por
 regime (`Chamados_TCU` e `Chamados_24x7`).
 
 **Estado vigente:** o motor depende só de dados do SDM e do arquivo de
-feriados. **Fonte funcional: Edital PE 90028/2025 e anexos** (Anexo VII em
-especial), desde a revisão contratual de 2026-10-07 (seção 12, última
-intervenção); a técnica de posse e de leitura do `act_log` foi reaproveitada
-da Decision, mas não é fonte de regra. Parâmetros ficam no próprio SQL. Não existe separação DCIM x Manutenção nem parâmetro
+feriados. O contrato (Edital PE 90028/2025, Anexo VII) define metas, fatores,
+cobertura (Contagem), prioridades e nomenclatura; a mecânica dos tempos
+(posse, primeiro atendimento e Tempo de Atendimento) é a lógica operacional da
+Decision adaptada à posse da Virtual. Primeiro atendimento congelado.
+Parâmetros ficam no próprio SQL (seção 12, intervenções de 2026-10-07). Não existe separação DCIM x Manutenção nem parâmetro
 `@Planilha` (seção 12, intervenção de 2026-10-02 "remoção da dependência de
 planilha").
 
@@ -1045,3 +1046,50 @@ antes da entrada) 0 → 408,08; 1650826 0 → 42,38; 1667813 24,58 → 43,37;
 1651064 0 → 25,08. Nenhum chamado passou de Não Atende para Atende.
 
 SHA256 do motor (LF): `1bd7e66fffa0efcfec6430fa66608f507f37301a07251125c6a6077ccaa50abe`.
+
+### 2026-10-07 — correção seletiva: restaura o Tempo de Atendimento operacional
+
+Decisão do usuário sobre a revisão contratual acima (commits locais `28c5238`
+e `b4c673c`, não publicados): ela foi longe demais ao mudar o `Tsol` para
+`T0 (open_date) → T2 − homologação`. O FARC da Virtual **não** deve contar
+desde a abertura no SDM, nem o tempo no COI antes da entrada, fora da posse ou
+em `Agendado`. Também por decisão do usuário:
+
+- abatimento financeiro por item contratual (itens 2, 3 e 4) está **fora do
+  escopo** e não é bloqueio;
+- suspensão aprovada pelo TCU não é tratada como bloqueio; nenhum arquivo ou
+  mecanismo externo de aceite foi criado;
+- reclassificação: vale a prioridade gravada no SDM;
+- `Reaberto` continua contando dentro da posse (decisão não reaberta).
+
+Restaurado de `15dbe62` (via `git show`, blocos `[9]` a `[11]` do motor):
+status ativos `FIP`/`OP`/`REAB`, `SOLN` como pausa, `Tsol` = posse ∩ status
+ativos até a Resolução, parada = posse até a Resolução − `Tsol`. Mantido da
+revisão contratual: metas e fatores do Anexo VII (iguais aos de antes),
+`Contagem` (`24x7` / `Horário TCU`), `Prioridade` (1 a 5), `Horas Horário TCU`
+/ `Fora Horário TCU`, `Situação Meta Resolução`, `chave` com `Horário TCU`,
+calendário único e M contra *Formula.Firewall*. `Tempo suspenso` continua com o
+nome `Tempo Parada Contagem NMS (h)`, com o conteúdo de `15dbe62`. Saem as
+colunas `Tempo Agendado (h)` e `Tempo Fora Grupo Virtual (h)` (eram medidas
+sobre o intervalo T0–T2). Saída volta a 40 colunas.
+
+Comparação no mesmo instante (A = `15dbe62`, B = `b4c673c`, C = final):
+
+| Janela | Chamados | `Tsol` A×C | parada A×C | Excessos, metas, FAIA, FARC A×C | T1 A×C | FARC total A / B / C |
+|---|---|---|---|---|---|---|
+| maio/2026 (FECHAMENTO) | 19 | 0 dif. | 0 dif. | 0 dif. | 0 dif. | 0 / 0 / 0 |
+| 01/2025–10/2026 FECHAMENTO | 282 | 0 dif. | 0 dif. | 0 dif. | 0 dif. | 1310,85 / — / 1310,85 |
+| 01/2025–10/2026 RESOLUCAO | 293 | 0 dif. | 0 dif. | 0 dif. | 0 dif. | 1354,47 / 1948,75 / 1354,47 |
+
+Única diferença A×C além dos nomes: `Horas Horário TCU` / `Fora Horário TCU`
+dos chamados da Contagem `24x7` (9 de 12), que passaram a mostrar a divisão
+real em vez de 0 e o total; o excesso 24x7 usa o tempo corrido e não muda.
+Referência = Power BI = `.m` (motor do Power BI Desktop): 282 linhas, 40
+colunas, 0 diferenças.
+
+Casos: 1651174 (`Tsol` 4:55:25; FARC 0, contra 408,08 em B), 1660920
+(335:12:29; 16,64, contra 19,31 em B), 1650826 (7:27:20; 0, contra 42,38),
+1667813 (506:53:58; 24,58, contra 43,37), 1704841 (0:53:29; 0), 1719182
+(94:09:34; 28,06, contra 28,22 em B).
+
+SHA256 do motor (LF): `94d0ea4f2de32d46a44024daf120c3b2ece597ba685c421b9f112c7db60b792f`.
