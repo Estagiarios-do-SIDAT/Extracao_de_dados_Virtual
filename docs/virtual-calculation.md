@@ -262,8 +262,8 @@ Exemplo (SDM 1697694):
 
 ## 5. Calendário
 
-Os feriados e pontos facultativos vêm do **arquivo de feriados**, as linhas com
-`Escopo` `TODOS` ou `VIRTUAL` ([feriados.md](feriados.md)). O bloco `[2]` do motor
+Os feriados e pontos facultativos vêm do **arquivo de feriados**: o calendário
+do TCU, o mesmo da Decision e da A2B ([feriados.md](feriados.md)). O bloco `[2]` do motor
 recebe a lista no parâmetro `@Feriados`, valida cada data e monta
 `#Virt_Feriado` (datas únicas, `AAAA-MM-DD`) e `#Virt_FeriadoAnual` (fixos,
 `MM-DD`, todo ano). Quem preenche `@Feriados`: `tools/executar_consulta.ps1`
@@ -274,15 +274,17 @@ inválida, a consulta para com erro: nunca calcula com zero feriados.
 - Uma data do arquivo **não tem horário comercial**. Não existe contagem
   parcial de dia: um dia útil vale das 08:00 às 20:00 inteiro.
 - Sábado e domingo nunca têm horário comercial.
-- Hoje a Virtual tem 33 linhas: os 9 feriados nacionais fixos e 24 datas de
-  2025 e 2026.
+- Hoje o arquivo tem 35 linhas: os 9 feriados nacionais fixos (todo ano) e
+  13 datas de 2025 e 13 de 2026, das Portarias do TCU.
 
 Até 2026-10-06 a lista ficava no próprio SQL (`#Virt_Calendario`, 43 datas de
-2025 e 2026, com `Conta_SLA`). A mudança de fonte não mudou nenhum resultado:
-as mesmas datas sem horário comercial continuam valendo. 05/03/2025 (Quarta-Feira
-de Cinzas, `Conta_SLA = 'S'`, dia normal) ficou fora do escopo `VIRTUAL`;
-2025-07-20 (domingo) saiu; os 9 feriados nacionais passaram a valer em todo ano,
-e não só em 2025 e 2026 (as populações publicadas não chegam a outros anos).
+2025 e 2026, com `Conta_SLA`). Desde 2026-10-07 a Virtual usa o calendário
+único do TCU. Em relação à lista antiga, ela passou a descontar 05/03/2025
+(Quarta-Feira de Cinzas, antes `Conta_SLA = 'S'`), 20/06/2025 e 29/06/2026
+(jogo da Seleção, Portaria-TCU nº 93/2026), que estão nas Portarias; os
+feriados nacionais passaram a valer em todo ano; 2025-07-20 (domingo, sem
+fonte) saiu. Efeito nas populações publicadas: só 29/06/2026, em 3 chamados
+(histórico do projeto, 2026-10-07).
 
 ## 6. Parâmetros
 

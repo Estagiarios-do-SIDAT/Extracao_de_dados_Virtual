@@ -99,7 +99,9 @@ Em resumo:
   colunas de apuração da Virtual e colunas de contexto no padrão da Decision,
   entre elas `Resumo`, `Severidade`, `Status`, `Categoria`, os responsáveis
   pela abertura e pelo atendimento, as metas e `Item de Configuração`, com a
-  mesma definição das colunas de mesmo nome da Decision. `Grupo` (coluna 38) é o grupo do chamado no instante de
+  mesma definição das colunas de mesmo nome da Decision. Não há
+  `Responsável Resolução`: essa coluna não existe na Decision, e criá-la seria
+  uma regra nova (ver `docs/virtual-calculation.md`, seção 8.1). `Grupo` (coluna 38) é o grupo do chamado no instante de
   referência, pelo histórico de transferências: no fechamento (`FECHAMENTO`) ou
   na resolução (`RESOLUCAO`).
   `Tempo suspenso` é o tempo de posse até a resolução em status que pausam;
@@ -118,7 +120,8 @@ Em resumo:
   evento. Não é o fechamento (`close_date`) nem substitui a
   `Data/Hora Resolução`, que continua sendo o marco dos tempos.
 - **Horário comercial (`Comercial`):** 08:00–20:00, segunda a sexta, fora dos
-  feriados e pontos facultativos do arquivo de feriados (escopo `VIRTUAL`).
+  feriados e pontos facultativos do calendário do TCU (arquivo de feriados, o
+  mesmo da Decision e da A2B).
 
 A regra completa está em [`docs/virtual-calculation.md`](docs/virtual-calculation.md).
 
@@ -157,15 +160,17 @@ BI. Detalhes em [`docs/powerbi-query.md`](docs/powerbi-query.md).
 ## Feriados
 
 Os feriados e pontos facultativos ficam no **arquivo de feriados**, e não no
-SQL. Para incluir um feriado: editar o `feriados.csv` no SharePoint e salvar; a
-próxima atualização do relatório já usa a lista nova, sem mudar o SQL nem
-republicar. Manter igual o `config/feriados.csv` dos três repositórios
-(Virtual, Decision, A2B) e conferir com `tools/verificar_feriados.ps1`. Formato,
-escopo por projeto, falhas e a configuração do SharePoint estão em
-[`docs/feriados.md`](docs/feriados.md).
+SQL. É um calendário só, o do TCU (Portarias do TCU de cada ano), igual para
+Virtual, Decision e A2B. Para incluir um feriado: editar o `feriados.csv` no
+SharePoint e salvar; a próxima atualização do relatório já usa a lista nova,
+sem mudar o SQL nem republicar. Manter igual o `config/feriados.csv` dos três
+repositórios e conferir com `tools/verificar_feriados.ps1`.
 
-Os feriados fixos (`MM-DD`) valem todo ano; a cada ano novo, cadastrar as datas
-únicas do ano (feriados móveis e pontos facultativos).
+Os feriados nacionais fixos (`MM-DD`) valem todo ano automaticamente. A cada
+nova Portaria do TCU, cadastrar só as datas daquele ano (feriados móveis e
+pontos facultativos), com a Portaria na coluna `Fonte`. Formato, passo a passo,
+falhas, Power BI/SharePoint, privacidade e gateway em
+[`docs/feriados.md`](docs/feriados.md).
 
 ## Como validar
 

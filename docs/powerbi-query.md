@@ -32,7 +32,7 @@ O bloco é **idêntico byte a byte** nos dois arquivos. SHA256 do bloco, com fim
 linha LF:
 
 ```text
-501d841707082fa0107609620c606361e16c052c9db89466eeb1e056e80fc001
+e94e8bfe4f9d7f4f3c57c7431155a51871de7c64a2f76a968c254f8bca31ea96
 ```
 
 Ele recebe `@DataInicio`, `@DataFim`, `@DataReferencia` e `@Feriados` (lista
@@ -64,8 +64,13 @@ SharePoint, que o SQL Server não lê. A consulta do relatório é o `.m`:
 
 A cada atualização o arquivo de feriados é lido de novo. Arquivo inacessível,
 placeholder não preenchido ou linha inválida **falham a atualização** com
-mensagem. Detalhes, requisitos do serviço e o checklist do primeiro refresh
-em [feriados.md](feriados.md).
+mensagem. O `.m` faz tudo num único passo (`Fonte`): a primeira versão gerada,
+com um passo por etapa, era recusada pelo firewall de privacidade
+(*Formula.Firewall*). A estrutura atual foi validada com o motor do Power BI
+Desktop, com as duas fontes como Organizacional e sem ignorar níveis de
+privacidade; o acesso ao SharePoint Online real e o refresh no serviço ainda
+dependem de validação no PBIX. Detalhes, requisitos do serviço e o checklist do
+primeiro refresh em [feriados.md](feriados.md).
 
 É uma consulta só no modelo. Para separar os regimes no relatório, filtre pela
 coluna `Tipo SLA`.

@@ -119,14 +119,13 @@ VALUES
     (N'Solicitação', 4,  8.00, 180, N'TCU',  0.4, 0.2),
     (N'Solicitação', 5, 12.00, 360, N'TCU',  0.4, 0.2);
 
--- FERIADOS-ESCOPO: VIRTUAL
 --------------------------------------------------------------------------------
 -- [2] Feriados e pontos facultativos do regime Comercial (antigo TCU): datas
 --     sem horario comercial.
 --
 -- A lista de feriados NAO fica mais neste arquivo. Ela vem do arquivo de
--- feriados (config/feriados.csv; no Power BI, a copia no SharePoint), so com as
--- linhas do escopo declarado em "FERIADOS-ESCOPO", pelo parametro @Feriados
+-- feriados (config/feriados.csv; no Power BI, a copia no SharePoint), o mesmo
+-- calendario do TCU para Virtual, Decision e A2B, pelo parametro @Feriados
 -- (JSON):
 --   [{"data":"12-25","descricao":"Natal"},{"data":"2026-04-03","descricao":"..."}]
 --   MM-DD      = feriado fixo, vale todo ano;

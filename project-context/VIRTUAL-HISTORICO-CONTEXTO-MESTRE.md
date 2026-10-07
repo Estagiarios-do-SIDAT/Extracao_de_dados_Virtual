@@ -935,3 +935,45 @@ manutenção: com 2026-09-15 incluído só no arquivo, 2 chamados mudam (1727892
 horas comerciais de resolução 243:24:42 → 231:24:42, um dia útil); retirada a
 data, 0 diferenças; o SQL não mudou (mesmo SHA256). SHA256 do motor:
 `501d841707082fa0107609620c606361e16c052c9db89466eeb1e056e80fc001`.
+
+### 2026-10-07 — calendário único do TCU e correção do M (Formula.Firewall)
+
+Decisões do usuário (fechadas):
+
+- `Responsável Resolução` **não** é criada na Virtual: a coluna não existe na
+  Decision nem existiu no histórico; criá-la exigiria uma regra nova
+  (`act_log.analyst` no evento de encerramento seria só uma possível
+  definição). A Virtual fica com as oito colunas equivalentes à Decision.
+- Virtual, Decision e A2B usam **o mesmo calendário**, o da Portaria do TCU de
+  cada ano. Sem diferença por projeto; feriados nacionais fixos recorrentes
+  (`MM-DD`); datas móveis e pontos facultativos por ano (`AAAA-MM-DD`).
+
+Fontes: Portarias-TCU nº 10, 67, 157 e 176/2025 e nº 179/2025, 1 e 93/2026,
+obtidas do BTCU pela consulta de autenticidade (códigos 77411949, 77981373,
+79190602, 79506777, 79561193, 80587034). Arquivo novo: `Data,Descricao,Fonte`,
+35 linhas (9 fixas, 13 de 2025, 13 de 2026); coluna `Escopo` removida; tools,
+SQL (só comentários) e M sem lógica por projeto.
+
+Efeito na Virtual, contra o estado anterior (`44bc3af`), mesmo instante:
+
+| Consulta | Chamados | Alterados | Colunas | Causa |
+|---|---|---|---|---|
+| referência maio/2026 | 19 | 0 | — | — |
+| Power BI FECHAMENTO / RESOLUCAO | 276 / 293 | 3 / 3 | `Horas Comerciais Resolução (h)` −12:00:00 cada (−36:00:00), `Horas Não Comerciais Resolução (h)` +12:00:00 cada | 29/06/2026 (Portaria-TCU nº 93/2026) |
+| referência 01/01/2025 a 07/10/2026, dois modos | 276 / 293 | 3 / 3 | idem | idem |
+
+Maior: 1709362, horas comerciais de resolução 34:07:42 → 22:07:42. Tini,
+Tsol, excessos, metas, índices FAIA/FARC e Tempo suspenso não mudam (o Tsol é
+tempo corrido; o excesso desses chamados continua igual). Cinzas e 20/06/2025
+não afetam a Virtual (não há chamado da Virtual antes de set/2025).
+
+M: a primeira versão gerada falhava com *Formula.Firewall* no motor do Power
+BI Desktop, mesmo com SharePoint/Web e SQL como Organizacional (passo final
+acessando o SQL com dados de passos que acessavam o Web). O gerador passou a
+pôr tudo num único passo `Fonte`. Validado com o motor do Power BI Desktop
+(sem PBIX, arquivo por HTTP local): executa com Organizacional +
+Organizacional, firewall ativo e sem `FastCombine`; M = SQL (276 linhas, 40
+colunas, 0 diferenças); Privado/Público ou nível não definido são recusados;
+falhas e casos de borda conferidos. SharePoint Online real, OAuth2, PBIX,
+gateway e refresh no serviço ainda dependem do ambiente. SHA256 do motor:
+`e94e8bfe4f9d7f4f3c57c7431155a51871de7c64a2f76a968c254f8bca31ea96`.
