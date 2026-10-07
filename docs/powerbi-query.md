@@ -1,7 +1,11 @@
 # Consulta do Power BI — Virtual
 
 Fonte de dados do painel de FAIA e FARC da Virtual. A regra de cálculo está em
-[virtual-calculation.md](virtual-calculation.md).
+[virtual-calculation.md](virtual-calculation.md): metas, fatores e Contagem do
+Edital PE 90028/2025, Anexo VII (fonte oficial:
+<https://comprasnet.gov.br/ConsultaLicitacoes/download/download_editais_detalhe.asp?coduasg=30001&modprp=5&numprp=900282025>);
+Primeiro Atendimento, Tempo Primeiro Atendimento e Tempo de Atendimento pela
+mecânica operacional preservada.
 
 ---
 

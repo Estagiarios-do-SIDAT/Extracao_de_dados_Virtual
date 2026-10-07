@@ -7,12 +7,18 @@ A consulta lê só o SDM e entrega os chamados da Virtual numa **única tabela**
 com a coluna `Contagem` (`24x7` ou `Horário TCU`) dizendo a janela de contagem
 de cada chamado.
 
-**O contrato** (Edital PE 90028/2025, Anexo VII) define as metas, os fatores,
-a cobertura (Contagem: 24x7 e Horário TCU), as prioridades e a nomenclatura.
-**A mecânica dos tempos** (posse, primeiro atendimento e Tempo de Atendimento)
-é a lógica operacional consolidada na Decision, adaptada à posse da Virtual.
-O primeiro atendimento está congelado. A rastreabilidade está em
+**Regra contratual:** o Edital PE 90028/2025 (Anexo VII) define as metas por
+Tipo + Prioridade, os fatores FAIA e FARC, a cobertura (Contagem: 24x7 e
+Horário TCU) e a terminologia. **Mecânica operacional preservada:** Primeiro
+Atendimento, Tempo Primeiro Atendimento e Tempo de Atendimento seguem a lógica
+operacional consolidada na Decision e adaptada à posse da Virtual (a mesma da
+versão publicada `15dbe62`), e não a leitura literal dos marcos T0/T1/T2 do
+Anexo VII; o Tempo de Atendimento não conta desde a abertura do chamado. A
+rastreabilidade está em
 [`docs/virtual-calculation.md`](docs/virtual-calculation.md#13-rastreabilidade).
+
+Fonte oficial do pacote de Edital e anexos (PE 90028/2025, Comprasnet):
+<https://comprasnet.gov.br/ConsultaLicitacoes/download/download_editais_detalhe.asp?coduasg=30001&modprp=5&numprp=900282025>.
 Os feriados vêm do arquivo de feriados ([`docs/feriados.md`](docs/feriados.md)):
 `config/feriados.csv` nas consultas de `queries/` e o mesmo arquivo no
 SharePoint no Power BI.

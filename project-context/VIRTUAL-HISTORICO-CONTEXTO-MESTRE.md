@@ -983,6 +983,11 @@ gateway e refresh no serviço ainda dependem do ambiente. SHA256 do motor:
 
 ### 2026-10-07 — revisão contratual de FAIA e FARC (Anexo VII)
 
+> **Substituída em parte** pela correção seletiva logo abaixo: a contagem do
+> `Tsol` desde `open_date`, as colunas `Tempo Agendado`/`Tempo Fora Grupo
+> Virtual` e os bloqueios (item contratual, suspensão) **não** estão em vigor.
+> Continuam valendo as metas, os fatores, a Contagem e os nomes.
+
 Pedido do usuário: usar o Edital PE 90028/2025 e anexos como fonte de verdade,
 sem alterar o primeiro atendimento (`Data/Hora Início Atendimento` e
 `Tini (h)`), e sem usar Decision/A2B como fonte de regra. Baseline: Virtual
@@ -1093,3 +1098,28 @@ Casos: 1651174 (`Tsol` 4:55:25; FARC 0, contra 408,08 em B), 1660920
 (94:09:34; 28,06, contra 28,22 em B).
 
 SHA256 do motor (LF): `94d0ea4f2de32d46a44024daf120c3b2ece597ba685c421b9f112c7db60b792f`.
+
+### 2026-10-07 — verificação final e fonte oficial do Edital
+
+Fonte oficial do pacote de Edital e anexos da contratação PE 90028/2025
+(Comprasnet, UASG 30001):
+<https://comprasnet.gov.br/ConsultaLicitacoes/download/download_editais_detalhe.asp?coduasg=30001&modprp=5&numprp=900282025>.
+
+Regra contratual usada (Anexo VII): metas por Tipo + Prioridade (Tabela 1),
+fatores FAIA 0,4 em todas as prioridades e FARC 0,4 em P1/P2 e 0,2 em P3/P4/P5
+(Tabela 2), Contagem 24x7 / Horário TCU (Tabela 1, 3.1.13, 3.1.14) e
+terminologia. Conferidas de novo no PDF original: iguais ao bloco `[1]`.
+
+Mecânica operacional preservada (decisão do usuário): Primeiro Atendimento,
+Tempo Primeiro Atendimento e Tempo de Atendimento seguem a lógica da Decision
+adaptada à posse da Virtual, idêntica à de `15dbe62`; o Tempo de Atendimento
+não conta desde `open_date`.
+
+Regressão contra `15dbe62`, mesmo instante (maio/2026 19 chamados;
+01/2025–10/2026 FECHAMENTO 282 e RESOLUCAO 293): 0 diferenças em
+`Data/Hora Início Atendimento`, `Tini (h)`, `Tsol (h)`, excessos, metas,
+`Meta Primeiro Atendimento`, `Situação Meta Resolução`, `Indice FAIA` e
+`Indice FARC` (FAIA 15,559667; FARC 1310,850667 / 1354,468500 nos dois modos).
+Única diferença além dos nomes: as horas dentro/fora do Horário TCU dos
+chamados 24x7 (informativas). SHA256 do motor inalterado:
+`94d0ea4f2de32d46a44024daf120c3b2ece597ba685c421b9f112c7db60b792f`.

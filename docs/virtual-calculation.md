@@ -5,15 +5,26 @@ que apura FAIA e FARC do fornecedor **Virtual** direto do SDM (`mdb`).
 
 Duas fontes, com papéis diferentes:
 
-- **Contrato** — Edital PE 90028/2025 e anexos, em especial o **Anexo VII —
-  Níveis Mínimos de Serviço** (autenticidade 77219622): metas de resposta
-  inicial e de resolução, cobertura (`Contagem`: 24x7 ou Horário TCU), fatores
-  FAIA e FARC, prioridades e a nomenclatura das colunas (seção 13).
-- **Mecânica operacional dos tempos** — a lógica de atendimento e posse
-  consolidada na Decision (`Extracao_de_dados_Decision`) e adaptada à Virtual:
-  conta só o tempo em que o chamado esteve no grupo `Fornecedores - Virtual`,
-  e o Tempo de Atendimento conta só os status ativos. O primeiro atendimento
-  (`Data/Hora Início Atendimento`, `Tini (h)`) está congelado.
+- **Regra contratual** — Edital PE 90028/2025 e anexos, em especial o
+  **Anexo VII — Níveis Mínimos de Serviço** (autenticidade 77219622). Dele vêm
+  só: as metas por Tipo + Prioridade, os fatores FAIA e FARC, a cobertura
+  (`Contagem`: 24x7 ou Horário TCU) e a terminologia da contratação (seção 13).
+- **Mecânica operacional preservada (decisão do usuário)** — três medidas
+  **não** seguem a leitura literal dos marcos T0/T1/T2 do Anexo VII (3.1.6 a
+  3.1.8) e continuam com a lógica operacional consolidada na Decision
+  (`Extracao_de_dados_Decision`) e adaptada à posse da Virtual, igual à da
+  versão publicada `15dbe62`:
+  - `Data/Hora Início Atendimento` (Primeiro Atendimento);
+  - `Tini (h)` (Tempo Primeiro Atendimento);
+  - `Tsol (h)` (Tempo de Atendimento): posse da Virtual em status ativo até a
+    resolução. **Não** conta desde a abertura (`open_date`) e **não** inclui o
+    tempo antes da entrada na Virtual nem fora da posse.
+
+**Fonte oficial do pacote de Edital e anexos** da contratação PE 90028/2025
+(Comprasnet, UASG 30001):
+<https://comprasnet.gov.br/ConsultaLicitacoes/download/download_editais_detalhe.asp?coduasg=30001&modprp=5&numprp=900282025>. Cópias locais usadas na conferência:
+`Documentos e Relatórios/Virtual/Edital/` (Edital PE 90028-2025, Anexos I, VII,
+VIII, IX, X e XI) e `Documentos e Relatórios/Virtual/RelacaoItens03000105900282025000.pdf`.
 
 A população vem só do SDM. Os feriados vêm do arquivo de feriados (seção 5 e
 [feriados.md](feriados.md)). A consulta não calcula abatimento financeiro por
@@ -602,6 +613,9 @@ operacionais do usuário, não pendências:
 
 ## 13. Rastreabilidade
 
+Fonte oficial dos documentos citados: pacote do Edital PE 90028/2025 no
+Comprasnet (<https://comprasnet.gov.br/ConsultaLicitacoes/download/download_editais_detalhe.asp?coduasg=30001&modprp=5&numprp=900282025>).
+
 | Regra | Fonte | Item/cláusula | Implementação SQL |
 |---|---|---|---|
 | Tipos de chamado: incidente e solicitação | Anexo VII | Tabela 1 | bloco `[3]`: `type IN ('I','R')` |
@@ -617,4 +631,4 @@ operacionais do usuário, não pendências:
 | Colunas do relatório analítico | Anexo VII | 6.19 | mapa da seção 8 |
 | Tempo de parada de contagem | Anexo VII | 6.19.13 | `Tempo Parada Contagem NMS (h)` |
 | Extração automatizada do SDM | Anexo VII | 3.1.10, 6.23 | consulta única, sem etapa manual |
-| Posse, primeiro atendimento, Tempo de Atendimento | mecânica operacional (Decision adaptada) | — | blocos `[5]`–`[6.1]`, `[6]` (início), `[9]`, `[10]` |
+| Posse, Primeiro Atendimento, Tempo Primeiro Atendimento, Tempo de Atendimento | mecânica operacional preservada (Decision adaptada; não é regra do Anexo VII) | — | blocos `[5]`–`[6.1]`, `[6]` (início), `[9]`, `[10]` |
