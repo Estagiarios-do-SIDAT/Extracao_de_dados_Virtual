@@ -1,7 +1,7 @@
-# Apuração FAIA e FARC — Virtual
+# Apuração FAIA e FARC — Virtual TI
 
-Regras da consulta [`queries/consulta_virtual_faia_farc.sql`](../queries/consulta_virtual_faia_farc.sql),
-que apura FAIA e FARC do fornecedor **Virtual** direto do SDM (`mdb`).
+Regras da consulta [`queries/consulta_virtual_ti_faia_farc.sql`](../queries/consulta_virtual_ti_faia_farc.sql),
+que apura FAIA e FARC do fornecedor **Virtual TI** direto do SDM (`mdb`).
 
 Duas fontes, com papéis diferentes:
 
@@ -12,22 +12,22 @@ Duas fontes, com papéis diferentes:
 - **Mecânica operacional preservada (decisão do usuário)** — três medidas
   **não** seguem a leitura literal dos marcos T0/T1/T2 do Anexo VII (3.1.6 a
   3.1.8) e continuam com a lógica operacional consolidada na Decision
-  (`Extracao_de_dados_Decision`) e adaptada à posse da Virtual, igual à da
+  (`Extracao_de_dados_Decision`) e adaptada à posse da Virtual TI, igual à da
   versão publicada `15dbe62`:
   - `Data/Hora Início Atendimento` (Primeiro Atendimento);
   - `Tini (h)` (Tempo Primeiro Atendimento);
-  - `Tsol (h)` (Tempo de Atendimento): posse da Virtual em status ativo até a
+  - `Tsol (h)` (Tempo de Atendimento): posse da Virtual TI em status ativo até a
     resolução. **Não** conta desde a abertura (`open_date`) e **não** inclui o
-    tempo antes da entrada na Virtual nem fora da posse.
+    tempo antes da entrada na Virtual TI nem fora da posse.
 
 **Fonte oficial do pacote de Edital e anexos** da contratação PE 90028/2025
 (Comprasnet, UASG 30001):
 <https://comprasnet.gov.br/ConsultaLicitacoes/download/download_editais_detalhe.asp?coduasg=30001&modprp=5&numprp=900282025>. Cópias locais usadas na conferência:
-`Documentos e Relatórios/Virtual/Edital/` (Edital PE 90028-2025, Anexos I, VII,
-VIII, IX, X e XI) e `Documentos e Relatórios/Virtual/RelacaoItens03000105900282025000.pdf`.
+`Documentos e Relatórios/Virtual TI/Edital/` (Edital PE 90028-2025, Anexos I, VII,
+VIII, IX, X e XI) e `Documentos e Relatórios/Virtual TI/RelacaoItens03000105900282025000.pdf`.
 
-A população vem só do SDM. Os feriados vêm do arquivo de feriados (seção 5 e
-[feriados.md](feriados.md)). A consulta não calcula abatimento financeiro por
+A população vem só do SDM. Os feriados vêm do calendário
+[`docs/feriados.txt`](feriados.txt) (seção 5). A consulta não calcula abatimento financeiro por
 item contratual (seção 11).
 
 ---
@@ -63,7 +63,7 @@ Parâmetros, no topo do arquivo:
 |---|---|
 | `@DataInicio` | início do período, inclusivo, horário do Brasil |
 | `@DataFim` | fim do período, **exclusivo** |
-| `@DataReferencia` | `N'FECHAMENTO'` (padrão) ou `N'RESOLUCAO'`: data do período e marco em que a responsabilidade da Virtual é validada (seção 2) |
+| `@DataReferencia` | `N'FECHAMENTO'` (padrão) ou `N'RESOLUCAO'`: data do período e marco em que a responsabilidade da Virtual TI é validada (seção 2) |
 
 Para um mês inteiro, use o dia 1 do mês e o dia 1 do mês seguinte (por exemplo
 `2026-05-01` e `2026-06-01`). Nunca `23:59:59`.
@@ -75,7 +75,7 @@ Uma linha por chamado. As colunas vêm em blocos (lista completa na seção 8):
 | A — identificação e datas | 1 a 9: do `ID Chamado` até `Data/Hora Fechamento` |
 | B — apuração | 10 a 24: `Tini (h)` até `Indice FAIA` |
 | C — contexto | 25 a 37: `Status` até `Situação Meta Resolução` |
-| D — grupo, agendamento e encerramento | 38: `Grupo`; 39: `Indicador de Agendamento`; 40: `Data de Encerramento Virtual` |
+| D — grupo, agendamento e encerramento | 38: `Grupo`; 39: `Indicador de Agendamento`; 40: `Data de Encerramento Virtual TI` |
 
 ## 2. Escopo e período
 
@@ -84,8 +84,8 @@ escolhida em uma linha no topo do arquivo:
 
 | Modo | Data do período | Campo obrigatório | Responsabilidade validada em |
 |---|---|---|---|
-| `N'FECHAMENTO'` (padrão) | `Data/Hora Fechamento` (`call_req.close_date`) | `close_date` | fechamento: o chamado encerrou na Virtual |
-| `N'RESOLUCAO'` | `Data/Hora Resolução` (`call_req.resolve_date`) | `resolve_date` (`close_date` pode estar vazio) | instante da resolução: dentro de uma janela de posse da Virtual |
+| `N'FECHAMENTO'` (padrão) | `Data/Hora Fechamento` (`call_req.close_date`) | `close_date` | fechamento: o chamado encerrou na Virtual TI |
+| `N'RESOLUCAO'` | `Data/Hora Resolução` (`call_req.resolve_date`) | `resolve_date` (`close_date` pode estar vazio) | instante da resolução: dentro de uma janela de posse da Virtual TI |
 
 Nos dois modos o chamado precisa ser **Incidente** ou **Solicitação** (`type`
 `I` ou `R`): o Anexo VII só define níveis de serviço para esses dois tipos
@@ -99,14 +99,14 @@ RESOLUCAO ou FECHAMENTO.*
 1. `close_date` está preenchido e cai em `[@DataInicio, @DataFim)`;
 2. está em **status terminal**: `CL`, `CLD`, `CLUNRSLV`, `CNCL`, `ATGR`, `END`,
    `PC`, `RE` ou `VARES` (a mesma lista da Decision, lida por código);
-3. o **grupo no fechamento** é `Fornecedores - Virtual`: nasceu na Virtual e
+3. o **grupo no fechamento** é `Fornecedores - Virtual`: nasceu na Virtual TI e
    nunca teve transferência de grupo, ou a **última transferência de grupo até
-   o fechamento** foi uma entrada na Virtual.
+   o fechamento** foi uma entrada na Virtual TI.
 
 O item 3 é verificado pela cadeia de transferências do `act_log` (`TR`,
 `Transferir Grupo de 'X' para 'Y'`), em ordem de `system_time` e `act_log.id`;
-o grupo atual do cadastro não decide. Ter passado pela Virtual não basta: um
-chamado `COI → Virtual → COI → fechamento` fechou no COI e fica fora (ex.:
+o grupo atual do cadastro não decide. Ter passado pela Virtual TI não basta: um
+chamado `COI → Virtual TI → COI → fechamento` fechou no COI e fica fora (ex.:
 1651174, fechado em 24/07/2026 no COI). Uma transferência gravada no mesmo
 segundo do fechamento conta antes dele, salvo se o registro `CL` desse segundo
 tiver `act_log.id` menor.
@@ -114,17 +114,17 @@ tiver `act_log.id` menor.
 **RESOLUCAO.** O chamado entra quando:
 
 1. `resolve_date` está preenchido e cai em `[@DataInicio, @DataFim)`;
-2. passou pela Virtual (grupo atual Virtual ou alguma transferência de grupo
+2. passou pela Virtual TI (grupo atual Virtual TI ou alguma transferência de grupo
    para ela);
-3. **a resolução ocorreu dentro de uma janela de posse da Virtual**:
+3. **a resolução ocorreu dentro de uma janela de posse da Virtual TI**:
    `resolve_date` maior ou igual ao início de uma janela e menor ou igual ao
    fim dela; janela ainda aberta vale para qualquer instante posterior ao
    início.
 
 Não se exige fechamento, status terminal nem grupo atual: entra o chamado
 resolvido no período e ainda em `Em homologação`, e entra o chamado resolvido
-na Virtual e depois devolvido ao COI. Um chamado resolvido pelo COI depois de
-sair da Virtual fica fora.
+na Virtual TI e depois devolvido ao COI. Um chamado resolvido pelo COI depois de
+sair da Virtual TI fica fora.
 
 A chave só muda **quais chamados entram**. Marcos, janelas de posse, tempos,
 metas, excessos, índices, Contagem e as colunas de data continuam iguais para
@@ -140,11 +140,11 @@ Exemplos:
 | 1704841 | 28/05/2026 | 03/06/2026 | junho | maio |
 | 1696948 | 29/04/2026 | 05/05/2026 | maio | abril |
 | 1736039 | 30/09/2026 | — (em homologação) | não entra | setembro |
-| 1651174 | 20/07/2026 (na Virtual) | 24/07/2026 (no COI) | não entra | julho |
-| 1644738 | 29/09/2025 (pelo COI, após sair da Virtual) | 29/09/2025 | não entra | não entra |
+| 1651174 | 20/07/2026 (na Virtual TI) | 24/07/2026 (no COI) | não entra | julho |
+| 1644738 | 29/09/2025 (pelo COI, após sair da Virtual TI) | 29/09/2025 | não entra | não entra |
 
-**Nasceu na Virtual** quando o grupo de origem da primeira transferência de
-grupo é a Virtual; sem nenhuma transferência de grupo, vale o grupo atual. É o
+**Nasceu na Virtual TI** quando o grupo de origem da primeira transferência de
+grupo é a Virtual TI; sem nenhuma transferência de grupo, vale o grupo atual. É o
 caso, por exemplo, de rotinas registradas pela automação direto na fila.
 
 ## 3. Contagem: 24x7 e Horário TCU
@@ -180,19 +180,19 @@ Todos em horário do Brasil (UTC−3), a partir dos campos em epoch do SDM.
 | Coluna | Origem |
 |---|---|
 | `Data/Hora Abertura` | `call_req.open_date` (registro do chamado) |
-| `Data Entrada Grupo Virtual` | primeira entrada na Virtual: a primeira transferência de grupo para `Fornecedores - Virtual`; se nasceu na Virtual, a abertura |
-| `Data/Hora Início Atendimento` | primeira passagem para **`Em andamento`** (evento `ST`/`RE`) feita **enquanto o chamado está no grupo Virtual**: a captura da Decision. Sem ela, a primeira atividade registrada na posse; sem atividade, a entrada na Virtual |
+| `Data Entrada Grupo Virtual TI` | primeira entrada na Virtual TI: a primeira transferência de grupo para `Fornecedores - Virtual`; se nasceu na Virtual TI, a abertura |
+| `Data/Hora Início Atendimento` | primeira passagem para **`Em andamento`** (evento `ST`/`RE`) feita **enquanto o chamado está no grupo Virtual TI**: a captura da Decision. Sem ela, a primeira atividade registrada na posse; sem atividade, a entrada na Virtual TI |
 | `Data/Hora Resolução` | `call_req.resolve_date`, gravado quando o chamado vai para `Em homologação` (evento `RE`) |
 | `Data/Hora Fechamento` | `call_req.close_date`, gravado no encerramento do chamado (evento `CL`, em geral pela automação, dias depois da resolução) |
-| `Data de Encerramento Virtual` | último **encerramento** da Virtual durante a posse: entrada em `Em homologação` ou `SOLN` (ver abaixo); vazia se não houver |
+| `Data de Encerramento Virtual TI` | último **encerramento** da Virtual TI durante a posse: entrada em `Em homologação` ou `SOLN` (ver abaixo); vazia se não houver |
 
 **Primeiro atendimento (congelado).** `Data/Hora Início Atendimento` e
 `Tini (h)` (Tempo Primeiro Atendimento) seguem a regra operacional abaixo e não
 são alterados por revisões de terminologia ou de parâmetros. Ao transferir para
-a Virtual, o COI devolve o chamado para `Aguarda atendimento`. O início é a
-primeira vez que a Virtual põe o chamado em `Em andamento`, como a captura da
+a Virtual TI, o COI devolve o chamado para `Aguarda atendimento`. O início é a
+primeira vez que a Virtual TI põe o chamado em `Em andamento`, como a captura da
 Decision. Passar antes para `Agendado` não é início: o chamado ainda não foi
-atendido. Um `Em andamento` só conta se houver uma entrada na Virtual antes
+atendido. Um `Em andamento` só conta se houver uma entrada na Virtual TI antes
 dele e nenhuma saída entre essa entrada e o evento, inclusive no mesmo segundo;
 um `Em andamento` dado pelo COI fora da posse não conta.
 
@@ -200,7 +200,7 @@ Sem `Em andamento` dentro da posse, vale o fallback da Decision:
 
 1. a **primeira atividade** registrada no `act_log` dentro da posse, de
    qualquer tipo exceto transferência (`TR`), com o mesmo critério de posse;
-2. sem atividade, a **entrada na Virtual** (Tini = 0).
+2. sem atividade, a **entrada na Virtual TI** (Tini = 0).
 
 A atividade no mesmo segundo da entrada não conta: é a mudança de status que o
 COI grava ao transferir o chamado.
@@ -216,13 +216,13 @@ solução (`SOLN`).
 pela linha do tempo de transferências de grupo:
 
 - `FECHAMENTO`: o grupo no fechamento, o mesmo que decide o escopo; como o
-  escopo exige a Virtual, todas as linhas trazem `Fornecedores - Virtual`;
+  escopo exige a Virtual TI, todas as linhas trazem `Fornecedores - Virtual`;
 - `RESOLUCAO`: o grupo no instante da resolução (última transferência de
-  grupo antes de `resolve_date`). Um chamado resolvido na Virtual e transferido
+  grupo antes de `resolve_date`). Um chamado resolvido na Virtual TI e transferido
   depois traz `Fornecedores - Virtual` (ex.: 1651174, resolvido em 20/07/2026
   11:19:27 e transferido ao COI às 15:49:23).
 
-**Data de Encerramento Virtual.** O momento em que a Virtual encerrou sua
+**Data de Encerramento Virtual TI.** O momento em que a Virtual TI encerrou sua
 atuação no chamado (equivalente da Data de Encerramento Decision):
 
 - encerra a atuação um evento de status do `act_log` (`ST`, `RE`, `RO`, `CL`...)
@@ -232,7 +232,7 @@ atuação no chamado (equivalente da Data de Encerramento Decision):
   outro encerramento. `Em homologação` → `Reaberto` não é encerramento, e
   `Em homologação pelo fiscal` é outro status. Um `SOLN` registrado com o
   chamado já em homologação não é novo encerramento (ex.: 1681392);
-- o evento precisa estar dentro da posse da Virtual, com o mesmo critério do
+- o evento precisa estar dentro da posse da Virtual TI, com o mesmo critério do
   Início;
 - com reabertura e nova homologação, vale a **última** entrada válida (ex.:
   1650824 → 07/11/2025 17:13:55; 1660920 → 16/12/2025 11:08:09);
@@ -240,7 +240,7 @@ atuação no chamado (equivalente da Data de Encerramento Decision):
 - sem evento válido, fica **vazia**.
 
 É informativa: a `Data/Hora Resolução` é o marco dos tempos e do modo
-`RESOLUCAO`; a Data de Encerramento Virtual não muda população, tempos nem
+`RESOLUCAO`; a Data de Encerramento Virtual TI não muda população, tempos nem
 índices.
 
 Exemplo (SDM 1697694):
@@ -249,7 +249,7 @@ Exemplo (SDM 1697694):
 01/05 09:00:05  INIT  automação                       -> Abertura
 01/05 09:13:39  ST    Aberto, aguarda atendimento -> Em andamento   (COI)
 01/05 09:21:55  ST    Em andamento -> Aguarda atendimento           (COI)
-01/05 09:21:55  TR    Grupo 'COI' -> 'Fornecedores - Virtual'       -> Entrada na Virtual
+01/05 09:21:55  TR    Grupo 'COI' -> 'Fornecedores - Virtual'       -> Entrada na Virtual TI
 01/05 09:35:23  ST    Aguarda atendimento -> Em andamento           -> Início
 01/05 09:35:24  TR    Responsável '' -> Willian Correa dos Santos   (não muda a posse)
 04/05 10:22:01  RE    Em andamento -> Em homologação                -> Resolução
@@ -258,13 +258,14 @@ Exemplo (SDM 1697694):
 
 ## 5. Calendário
 
-Os feriados e pontos facultativos vêm do **arquivo de feriados**: o calendário
-do TCU, o mesmo da Decision e da A2B ([feriados.md](feriados.md)). O bloco `[2]` do motor
+Os feriados e pontos facultativos vêm do calendário
+[`docs/feriados.txt`](feriados.txt): o calendário do TCU, o mesmo da Decision
+e da A2B. O bloco `[2]` do motor
 recebe a lista no parâmetro `@Feriados`, valida cada data e monta
 `#Virt_Feriado` (datas únicas, `AAAA-MM-DD`) e `#Virt_FeriadoAnual` (fixos,
 `MM-DD`, todo ano). Quem preenche `@Feriados`: `tools/executar_consulta.ps1`
-(consulta de referência) e `powerbi/consulta_virtual_chamados_power_bi.m`
-(Power BI, a partir do SharePoint). Sem `@Feriados`, ou com lista vazia ou
+(consulta de referência) e `powerbi/consulta_virtual_ti_power_bi.m`
+(Power BI, a partir do SharePoint; ver `powerbi/powerbi-query.md`). Sem `@Feriados`, ou com lista vazia ou
 inválida, a consulta para com erro: nunca calcula com zero feriados.
 
 - Uma data do arquivo **não é dia útil**: fica fora do Horário TCU (3.1.13).
@@ -275,7 +276,7 @@ inválida, a consulta para com erro: nunca calcula com zero feriados.
   13 datas de 2025 e 13 de 2026, das Portarias do TCU.
 
 Até 2026-10-06 a lista ficava no próprio SQL (`#Virt_Calendario`, 43 datas de
-2025 e 2026, com `Conta_SLA`). Desde 2026-10-07 a Virtual usa o calendário
+2025 e 2026, com `Conta_SLA`). Desde 2026-10-07 a Virtual TI usa o calendário
 único do TCU.
 
 ## 6. Parâmetros
@@ -303,14 +304,14 @@ populações publicadas está nesse caso.
 
 ## 7. Cálculo por chamado
 
-### 7.1 Janelas de posse da Virtual
+### 7.1 Janelas de posse da Virtual TI
 
-O tempo atribuído à Virtual é a soma das **janelas de posse**:
+O tempo atribuído à Virtual TI é a soma das **janelas de posse**:
 
-- o relógio começa na **primeira entrada** na Virtual; se o chamado **nasceu
-  na Virtual**, na **abertura**. O tempo em outro grupo antes da entrada não
+- o relógio começa na **primeira entrada** na Virtual TI; se o chamado **nasceu
+  na Virtual TI**, na **abertura**. O tempo em outro grupo antes da entrada não
   conta;
-- **saída** da Virtual para o relógio; **reentrada** o religa;
+- **saída** da Virtual TI para o relógio; **reentrada** o religa;
 - **todas as janelas são somadas**;
 - transferência apenas de **responsável** não muda a posse;
 - o primeiro atendimento é medido até o **Início**, a resolução até a
@@ -319,19 +320,19 @@ O tempo atribuído à Virtual é a soma das **janelas de posse**:
 As janelas vêm da linha do tempo de grupo: a abertura (no grupo inicial) e
 cada transferência de grupo do `act_log`, em ordem de `system_time` e, no
 empate, de `act_log.id`. Cada trecho vai de um evento ao seguinte; ficam os
-trechos em que o grupo é a Virtual. Eventos no mesmo segundo geram trecho de
+trechos em que o grupo é a Virtual TI. Eventos no mesmo segundo geram trecho de
 duração zero, que não soma nada.
 
 Exemplos:
 
 ```text
-1714513  COI -> Virtual
+1714513  COI -> Virtual TI
   07/07 17:16:48 abertura (COI)
-  08/07 16:59:48 entrada na Virtual     janela: 08/07 16:59:48 -> fim
+  08/07 16:59:48 entrada na Virtual TI     janela: 08/07 16:59:48 -> fim
   08/07 17:20:41 Início                 Tini 0:20:53
   o dia em que o chamado ficou no COI não conta
 
-1702424  COI -> Virtual -> COI -> Virtual
+1702424  COI -> Virtual TI -> COI -> Virtual TI
   20/05 09:00:02 abertura (COI)
   20/05 09:09:17 entrada -> 09:15:51 saída      janela 1
   20/05 09:18:46 reentrada -> 21/05 10:10:04    janela 2 (até a Resolução)
@@ -377,13 +378,13 @@ da posse até a Resolução:
 Tsol + Tempo Parada Contagem NMS = tempo de posse até a Resolução
 ```
 
-O tempo fora da posse (antes da primeira entrada na Virtual e entre uma saída e
+O tempo fora da posse (antes da primeira entrada na Virtual TI e entre uma saída e
 uma reentrada) não entra em nenhum dos dois.
 
 Exemplo (SDM 1698592, duas passagens):
 
 ```text
-05/05 15:25:33 entrada na Virtual (Aguarda atendimento)   pausa       0:01:27
+05/05 15:25:33 entrada na Virtual TI (Aguarda atendimento)   pausa       0:01:27
 05/05 15:27:00 Em andamento -> Início                     Tsol        0:05:10
 05/05 15:32:10 saída para o COI                           fora da posse
 06/05 16:09:58 reentrada (Aguarda atendimento)            pausa       0:01:42
@@ -392,7 +393,7 @@ Exemplo (SDM 1698592, duas passagens):
 Tini 0:01:27   Tsol 2:09:24   Tempo Parada Contagem NMS 0:03:09
 ```
 
-Um chamado em `Agendado` por meses dentro da posse (rotinas que a Virtual
+Um chamado em `Agendado` por meses dentro da posse (rotinas que a Virtual TI
 reagenda) acumula esse tempo em `Tempo Parada Contagem NMS`, e não em `Tsol`.
 Exemplo: 1651174 ficou nove meses quase todo em `Agendado`; `Tsol` 4:55:25,
 parada 6331:19:38, FARC 0.
@@ -451,12 +452,12 @@ números e nunca são calculados a partir do texto.
 - `Tempo Parada Contagem NMS` é informativo: já está fora do `Tsol` e não é
   descontado de novo de nenhum excesso ou índice.
 - **Índice** em **pontos percentuais**: 8,065 h de excesso × 0,4 = 3,226.
-- Com o fallback da captura (seção 4), todo chamado que entrou na Virtual tem
+- Com o fallback da captura (seção 4), todo chamado que entrou na Virtual TI tem
   Início.
 
 Correspondência com as colunas da Decision:
 
-| Virtual | Decision |
+| Virtual TI | Decision |
 |---|---|
 | `Tini (h)` | Tempo Primeiro Atendimento |
 | `Tsol (h)` | Tempo de Atendimento |
@@ -465,20 +466,20 @@ Correspondência com as colunas da Decision:
 
 Diferenças em relação à Decision:
 
-| Regra | Decision | Virtual | Motivo |
+| Regra | Decision | Virtual TI | Motivo |
 |---|---|---|---|
-| Captura | 1º `Em andamento` após a entrada, em qualquer grupo | 1º `Em andamento` dentro da posse | o `Em andamento` dado pelo COI depois de o chamado sair da Virtual não é atendimento da Virtual |
-| Tempo Primeiro Atendimento | intervalo contínuo da entrada à captura | só o tempo de posse até a captura | tempo em outro grupo não é responsabilidade da Virtual |
-| Passagens no Tempo de Atendimento | a partir da última entrada | todas as janelas de posse | a Virtual atende em mais de uma passagem |
-| Fim do Tempo de Atendimento | 1º `SOLN`, senão `resolve_date` | Resolução (`resolve_date`), com o `SOLN` como pausa | na Virtual a entrega é a ida para `Em homologação`; o `SOLN` é raro e pode ser seguido de reabertura |
-| Tempo de parada | posse da abertura ao `close_date`, em status fora dos ativos do `Tempo Total Decision` | posse até a Resolução − `Tsol` | a Virtual não tem `Tempo Total Decision`; a parada é o complemento do `Tsol` no mesmo intervalo |
+| Captura | 1º `Em andamento` após a entrada, em qualquer grupo | 1º `Em andamento` dentro da posse | o `Em andamento` dado pelo COI depois de o chamado sair da Virtual TI não é atendimento da Virtual TI |
+| Tempo Primeiro Atendimento | intervalo contínuo da entrada à captura | só o tempo de posse até a captura | tempo em outro grupo não é responsabilidade da Virtual TI |
+| Passagens no Tempo de Atendimento | a partir da última entrada | todas as janelas de posse | a Virtual TI atende em mais de uma passagem |
+| Fim do Tempo de Atendimento | 1º `SOLN`, senão `resolve_date` | Resolução (`resolve_date`), com o `SOLN` como pausa | na Virtual TI a entrega é a ida para `Em homologação`; o `SOLN` é raro e pode ser seguido de reabertura |
+| Tempo de parada | posse da abertura ao `close_date`, em status fora dos ativos do `Tempo Total Decision` | posse até a Resolução − `Tsol` | a Virtual TI não tem `Tempo Total Decision`; a parada é o complemento do `Tsol` no mesmo intervalo |
 
 ### 7.6 Indicadores
 
 | Coluna | Pergunta | Fonte | Depende da posse? | Valores |
 |---|---|---|---|---|
 | `Indicador Reabertura` | o chamado foi reaberto? | `act_log` com tipo contendo `reab` ou descrição/ação contendo `reabert`, em todo o histórico do chamado | não | `Sim` / `Não` |
-| `Indicador de Agendamento` | o chamado passou para `Agendado` enquanto estava com a Virtual? | registro de status com **destino** `Agendado` (código `AGENDADO`), dentro de uma janela de posse | sim | `Sim` / `Não` |
+| `Indicador de Agendamento` | o chamado passou para `Agendado` enquanto estava com a Virtual TI? | registro de status com **destino** `Agendado` (código `AGENDADO`), dentro de uma janela de posse | sim | `Sim` / `Não` |
 
 Os indicadores não mudam tempos, excessos nem índices.
 
@@ -515,7 +516,7 @@ Os indicadores não mudam tempos, excessos nem índices.
 | 27 | Responsável Abertura | `call_req.log_agent` → `ca_contact` | nome; senão userid; senão `N/A` | — |
 | 28 | Responsável Atendimento | `call_req.assignee` → `ca_contact` | idem | responsável pelo atendimento (6.19.8) |
 | 29 | Item de Configuração | `call_req.affected_rc` → `ca_owned_resource` | vazio sem IC | — |
-| 30 | Data Entrada Grupo Virtual | primeira entrada na Virtual | seção 4 | — |
+| 30 | Data Entrada Grupo Virtual TI | primeira entrada na Virtual TI | seção 4 | — |
 | 31 | Tempo Parada Contagem NMS (h) | janelas de posse até 8 − 11 | corrido; posse em status que pausam (7.2) | tempo total de parada de contagem de NMS (6.19.13) |
 | 32 | Meta Primeiro Atendimento | 18 | `Atende` / `Não Atende` / `N/A` | — |
 | 33 | Indicador Reabertura | `act_log` | `Sim` / `Não` (7.6) | reabertura (3.8) |
@@ -525,7 +526,7 @@ Os indicadores não mudam tempos, excessos nem índices.
 | 37 | Situação Meta Resolução | 19 | `Atende` / `Não Atende` / `N/A` | — |
 | 38 | Grupo | `act_log` (transferências) | grupo no fechamento ou na resolução | — |
 | 39 | Indicador de Agendamento | `act_log` | `Sim` / `Não` (7.6) | — |
-| 40 | Data de Encerramento Virtual | `act_log` | informativa (seção 4) | — |
+| 40 | Data de Encerramento Virtual TI | `act_log` | informativa (seção 4) | — |
 
 ### 8.1 Nomes revisados em 2026-10-07
 
@@ -540,10 +541,10 @@ Os indicadores não mudam tempos, excessos nem índices.
 
 Mantidos: `Data/Hora Início Atendimento`, `Tini (h)` (congelados),
 `Meta Primeiro Atendimento`, `Tsol (h)`, `Excesso`, `Meta Resposta`, `Resumo`,
-`Tipo (Incidente/Solicitação)`, `Categoria`, `Data de Encerramento Virtual`.
+`Tipo (Incidente/Solicitação)`, `Categoria`, `Data de Encerramento Virtual TI`.
 
 A Decision **não tem** coluna `Responsável Resolução`, e nenhuma consulta dos
-projetos tem. Ela não foi criada na Virtual: sem uma definição de referência,
+projetos tem. Ela não foi criada na Virtual TI: sem uma definição de referência,
 uma coluna com esse nome seria uma regra nova.
 
 ## 9. Totais e arredondamento
@@ -579,7 +580,7 @@ A maior diferença num grupo é 0,002 ponto percentual.
   porque o `act_log` registra a transferência pelo nome.
 - Chamados em `Em homologação pelo fiscal` não têm `close_date` nem
   `resolve_date` e não entram em nenhum dos dois modos.
-- No modo `RESOLUCAO`, a busca de chamados que passaram pela Virtual lê o
+- No modo `RESOLUCAO`, a busca de chamados que passaram pela Virtual TI lê o
   `act_log` de todos os chamados resolvidos no período; numa janela de 12 meses
   a consulta leva cerca de 50 segundos, contra 1 a 2 segundos no modo
   `FECHAMENTO`.
@@ -606,8 +607,8 @@ operacionais do usuário, não pendências:
 | Ponto | Texto do Anexo VII | Consulta |
 |---|---|---|
 | Primeiro atendimento (T1) | assinatura do analista no campo "responsável"; resposta inicial = T1 − T0 (3.1.6, 3.1.7) | 1º `Em andamento` na posse; `Tini` = tempo de posse até ele (congelado) |
-| Início da contagem | registro do chamado (T0, 3.1.6) | primeira entrada na Virtual; tempo em outro grupo não conta |
-| Tempo de resolução | T0 a T2, sem homologação e suspensão justificada (3.1.8) | posse da Virtual em status ativo até a Resolução (7.2) |
+| Início da contagem | registro do chamado (T0, 3.1.6) | primeira entrada na Virtual TI; tempo em outro grupo não conta |
+| Tempo de resolução | T0 a T2, sem homologação e suspensão justificada (3.1.8) | posse da Virtual TI em status ativo até a Resolução (7.2) |
 | Reclassificação | 3.2.4, 3.5 | prioridade gravada no chamado (7.4) |
 | Reabertura | prazos desde a abertura original; prioridade +1 (3.7.5, 3.8.3) | linha do tempo operacional (7.3); prioridade gravada |
 

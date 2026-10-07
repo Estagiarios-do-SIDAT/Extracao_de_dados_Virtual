@@ -1,30 +1,31 @@
-# Extração de dados — Virtual
+# Extração de dados — Virtual TI
 
 Consultas SQL e documentação da apuração de **FAIA** e **FARC** do fornecedor
-**Virtual**, a partir da base do **CA Service Desk Manager** (`mdb`).
+**Virtual TI**, a partir da base do **CA Service Desk Manager** (`mdb`).
 
-A consulta lê só o SDM e entrega os chamados da Virtual numa **única tabela**,
-com a coluna `Contagem` (`24x7` ou `Horário TCU`) dizendo a janela de contagem
-de cada chamado.
+A consulta lê só o SDM e entrega os chamados da Virtual TI numa **única
+tabela**, com a coluna `Contagem` (`24x7` ou `Horário TCU`) dizendo a janela
+de contagem de cada chamado.
 
 **Regra contratual:** o Edital PE 90028/2025 (Anexo VII) define as metas por
 Tipo + Prioridade, os fatores FAIA e FARC, a cobertura (Contagem: 24x7 e
 Horário TCU) e a terminologia. **Mecânica operacional preservada:** Primeiro
 Atendimento, Tempo Primeiro Atendimento e Tempo de Atendimento seguem a lógica
-operacional consolidada na Decision e adaptada à posse da Virtual (a mesma da
-versão publicada `15dbe62`), e não a leitura literal dos marcos T0/T1/T2 do
+operacional consolidada na Decision e adaptada à posse da Virtual TI (a mesma
+da versão publicada `15dbe62`), e não a leitura literal dos marcos T0/T1/T2 do
 Anexo VII; o Tempo de Atendimento não conta desde a abertura do chamado. A
 rastreabilidade está em
 [`docs/virtual-calculation.md`](docs/virtual-calculation.md#13-rastreabilidade).
 
 Fonte oficial do pacote de Edital e anexos (PE 90028/2025, Comprasnet):
 <https://comprasnet.gov.br/ConsultaLicitacoes/download/download_editais_detalhe.asp?coduasg=30001&modprp=5&numprp=900282025>.
-Os feriados vêm do calendário [`docs/feriados.txt`](docs/feriados.txt)
-(explicado em [`docs/feriados.md`](docs/feriados.md)): a cópia do repositório
-nas consultas de `queries/` e o mesmo arquivo no SharePoint no Power BI.
+Os feriados vêm do calendário [`docs/feriados.txt`](docs/feriados.txt): a
+cópia do repositório nas consultas de `queries/` e o mesmo arquivo no
+SharePoint no Power BI.
 
-Este repositório atende **somente a Virtual**. Decision, A2B/Protect4 e COI têm
-repositórios próprios.
+Este repositório atende **somente a Virtual TI** (no SDM, grupo
+`Fornecedores - Virtual`). Decision, A2B/Protect4 e COI têm repositórios
+próprios.
 
 ## Estrutura
 
@@ -33,20 +34,19 @@ repositórios próprios.
 ├── analysis/
 │   └── virtual-query-report-analysis.xlsx          conferência Consulta x Relatório
 ├── queries/
-│   └── consulta_virtual_faia_farc.sql              consulta de referência
+│   └── consulta_virtual_ti_faia_farc.sql           consulta de referência (e fonte do .m)
 ├── powerbi/
-│   ├── consulta_virtual_chamados_power_bi.sql      SQL do Power BI (Horário TCU e 24x7)
-│   └── consulta_virtual_chamados_power_bi.m        consulta do relatório: feriados do SharePoint + SQL
+│   ├── consulta_virtual_ti_power_bi.m              A consulta do Power BI (única; gerada da referência)
+│   ├── powerbi-query.md                            documentação do Power BI (SharePoint, período, colunas)
+│   └── documentacao-powerbi-virtual.html           documentação resumida (visual HTML Content)
 ├── tools/
 │   ├── executar_consulta.ps1                       executa queries/ com os feriados do arquivo
-│   ├── gerar_powerbi_m.ps1                         gera powerbi/*.m a partir do .sql
-│   ├── verificar_feriados.ps1                      valida o arquivo e a sincronia dos repositórios
-│   └── feriados.ps1                                leitura e validação do arquivo (uso interno)
+│   ├── gerar_powerbi_m.ps1                         gera powerbi/*.m a partir do SQL de referência
+│   ├── verificar_feriados.ps1                      valida o calendário, a sincronia e se o .m está em dia
+│   └── feriados.ps1                                leitura e validação do calendário (uso interno)
 ├── docs/
-│   ├── virtual-calculation.md                      regras de cálculo
-│   ├── powerbi-query.md                            consulta do Power BI
-│   ├── feriados.txt                                calendário de feriados e pontos facultativos (igual em todos os repositórios)
-│   └── feriados.md                                 regras, formato e fontes do calendário (igual nos três repositórios)
+│   ├── virtual-calculation.md                      regras de cálculo e rastreabilidade
+│   └── feriados.txt                                calendário de feriados e pontos facultativos (igual em todos os repositórios)
 ├── project-context/
 │   └── VIRTUAL-HISTORICO-CONTEXTO-MESTRE.md        contexto de manutenção
 ├── support/                                        consultas auxiliares de investigação
@@ -55,7 +55,7 @@ repositórios próprios.
 
 ## Consulta de referência
 
-[`queries/consulta_virtual_faia_farc.sql`](queries/consulta_virtual_faia_farc.sql)
+[`queries/consulta_virtual_ti_faia_farc.sql`](queries/consulta_virtual_ti_faia_farc.sql)
 devolve **um resultado**, com 40 colunas e uma linha por chamado. A coluna
 `Contagem` diz a janela de contagem (no Anexo VII, a "Cobertura" da Tabela 1):
 
@@ -64,7 +64,7 @@ devolve **um resultado**, com 40 colunas e uma linha por chamado. A coluna
 | `24x7` | P1 e P2 | 00:00:00–23:59:59, todos os dias, tempo corrido | 3.1.14 |
 | `Horário TCU` | P3, P4 e P5 | 08:00–20:00, segunda a sexta, dias úteis (sem feriados e pontos facultativos) | 3.1.13 |
 
-Parâmetros no topo do arquivo:
+Parâmetros no bloco `PERIODO REFERENCIA`, no topo do arquivo:
 
 | Parâmetro | Uso |
 |---|---|
@@ -75,28 +75,27 @@ Parâmetros no topo do arquivo:
 `@DataReferencia` escolhe o marco da apuração. Para trocar, mude só essa
 linha; nenhum cálculo muda. Outro valor interrompe a consulta com erro.
 
-| Modo | Período por | Exige | Responsabilidade da Virtual validada em |
+| Modo | Período por | Exige | Responsabilidade da Virtual TI validada em |
 |---|---|---|---|
-| `FECHAMENTO` | `close_date` | fechamento | fechamento (encerrou na Virtual) |
+| `FECHAMENTO` | `close_date` | fechamento | fechamento (encerrou na Virtual TI) |
 | `RESOLUCAO` | `resolve_date` | resolução (`close_date` pode estar vazio) | instante da resolução (dentro de uma janela de posse) |
 
-Para um mês inteiro,
-use o dia 1 do mês e o dia 1 do mês seguinte, por exemplo `2026-07-01` e
-`2026-08-01`. Nunca use `23:59:59`.
+Para um mês inteiro, use o dia 1 do mês e o dia 1 do mês seguinte, por exemplo
+`2026-07-01` e `2026-08-01`. Nunca use `23:59:59`.
 
 Em resumo:
 
 - **Escopo:** chamados I/R do período. Em `FECHAMENTO`: fechados, em status
-  terminal, cujo grupo **no fechamento** era `Fornecedores - Virtual`, pelo
-  histórico de transferências (última transferência de grupo até o fechamento
-  foi uma entrada na Virtual, ou nasceram nela sem transferência). Ter passado
-  pela Virtual não basta. Em `RESOLUCAO`: resolvidos dentro de uma
-  janela de posse da Virtual, fechados ou não.
+  terminal, cujo grupo **no fechamento** era `Fornecedores - Virtual` (nome do
+  grupo no SDM), pelo histórico de transferências (última transferência de
+  grupo até o fechamento foi uma entrada na Virtual TI, ou nasceram nela sem
+  transferência). Ter passado pela Virtual TI não basta. Em `RESOLUCAO`:
+  resolvidos dentro de uma janela de posse da Virtual TI, fechados ou não.
 - **Metas, Contagem e fatores:** Anexo VII, Tabelas 1 e 2, por Tipo +
   Prioridade (bloco `[1]`). A mesma Contagem vale para a resposta inicial e
   para a resolução.
-- **Posse:** o relógio começa na primeira entrada na Virtual (na abertura, se
-  o chamado nasceu nela), para nas saídas e volta nas reentradas; todas as
+- **Posse:** o relógio começa na primeira entrada na Virtual TI (na abertura,
+  se o chamado nasceu nela), para nas saídas e volta nas reentradas; todas as
   janelas de posse são somadas. O tempo em outro grupo não conta.
 - **Primeiro atendimento (congelado):** `Data/Hora Início Atendimento` é o
   primeiro `Em andamento` dentro da posse (sem ele, a primeira atividade
@@ -115,24 +114,24 @@ Em resumo:
   do Edital) e suspensão aprovada pelo TCU (ver
   `docs/virtual-calculation.md`, seção 11).
 - **Colunas:** identificação e datas (com `Data/Hora Fechamento`), as colunas
-  de apuração e colunas de contexto: `Resumo` (a breve descrição, 6.19.14),
-  `Prioridade` (1 a 5, Tabela 4), `Status`, `Categoria`, os responsáveis pela
-  abertura e pelo atendimento, `Item de Configuração`, `Grupo` (grupo no
-  instante de referência: fechamento ou resolução), `Situação Meta Resolução`
-  e `Meta Primeiro Atendimento` (`Atende`/`Não Atende`). Não há
-  `Responsável Resolução` (ver `docs/virtual-calculation.md`, seção 8.1). As
-  durações saem como `[h]:mm:ss`; fatores e índices são numéricos e
-  calculados em segundos.
+  de apuração e colunas de contexto: `Resumo` (`call_req.summary`),
+  `Prioridade` (1 a 5, Tabela 4), `Status`, `Categoria` (`prob_ctg.sym`), os
+  responsáveis pela abertura e pelo atendimento, `Item de Configuração`,
+  `Grupo` (grupo no instante de referência: fechamento ou resolução, com o nome
+  do SDM), `Situação Meta Resolução` e `Meta Primeiro Atendimento`
+  (`Atende`/`Não Atende`). Não há `Responsável Resolução` (ver
+  `docs/virtual-calculation.md`, seção 8.1). As durações saem como
+  `[h]:mm:ss`; fatores e índices são numéricos e calculados em segundos.
 - **Indicadores (`Sim`/`Não`):** `Indicador Reabertura` diz se o chamado foi
   reaberto. `Indicador de Agendamento` diz se o chamado passou para `Agendado`
-  durante a posse da Virtual. Os dois são informativos: não mudam tempos,
+  durante a posse da Virtual TI. Os dois são informativos: não mudam tempos,
   excessos nem índices.
-- **Data de Encerramento Virtual:** o último encerramento da atuação da Virtual
-  durante a posse, por entrada em `Em homologação` ou por `SOLN` (solução
-  registrada). Coluna informativa, sem equivalente no contrato. Não é o
-  fechamento (`close_date`) nem substitui a `Data/Hora Resolução`.
+- **Data de Encerramento Virtual TI:** o último encerramento da atuação da
+  Virtual TI durante a posse, por entrada em `Em homologação` ou por `SOLN`
+  (solução registrada). Coluna informativa, sem equivalente no contrato. Não é
+  o fechamento (`close_date`) nem substitui a `Data/Hora Resolução`.
 - **Horário TCU:** 08:00–20:00, segunda a sexta, fora dos feriados e pontos
-  facultativos do calendário do TCU (arquivo de feriados, o mesmo da Decision e
+  facultativos do calendário do TCU (`docs/feriados.txt`, o mesmo da Decision e
   da A2B).
 
 A regra completa está em [`docs/virtual-calculation.md`](docs/virtual-calculation.md).
@@ -141,64 +140,63 @@ A consulta recebe os feriados pelo parâmetro `@Feriados`, montado a partir de
 `docs/feriados.txt` pelo script:
 
 ```powershell
-.\tools\executar_consulta.ps1 -Consulta .\queries\consulta_virtual_faia_farc.sql -Saida C:\temp\virtual
+.\tools\executar_consulta.ps1 -Consulta .\queries\consulta_virtual_ti_faia_farc.sql -Saida C:\temp\virtual_ti
 # ou, para abrir no SSMS:
-.\tools\executar_consulta.ps1 -Consulta .\queries\consulta_virtual_faia_farc.sql -GerarSql C:\temp\virtual_ssms.sql
+.\tools\executar_consulta.ps1 -Consulta .\queries\consulta_virtual_ti_faia_farc.sql -GerarSql C:\temp\virtual_ti_ssms.sql
 ```
 
 Aberto direto no SSMS, sem o script, o arquivo falha com *Must declare the
 scalar variable "@Feriados"*: a consulta nunca roda sem feriados. Ela só cria
-tabelas temporárias. Detalhes em [`docs/feriados.md`](docs/feriados.md).
+tabelas temporárias.
 
-## Consultas do Power BI
+## Consulta do Power BI
 
-| Arquivo | Saída |
-|---|---|
-| [`powerbi/consulta_virtual_chamados_power_bi.m`](powerbi/consulta_virtual_chamados_power_bi.m) | consulta do relatório (Power Query M): lê os feriados do SharePoint e executa o SQL abaixo |
-| [`powerbi/consulta_virtual_chamados_power_bi.sql`](powerbi/consulta_virtual_chamados_power_bi.sql) | todos os chamados (Horário TCU e 24x7), com as mesmas 40 colunas da referência |
+A **única** consulta do Power BI é
+[`powerbi/consulta_virtual_ti_power_bi.m`](powerbi/consulta_virtual_ti_power_bi.m)
+(Power Query M, colado no Editor Avançado). Ela é **gerada** da consulta de
+referência pelo `tools/gerar_powerbi_m.ps1`: só o período muda (janela móvel
+dos últimos `@CoberturaMeses` meses, padrão 12, mais o mês corrente). Não
+existe um SQL separado do Power BI para manter em paralelo.
 
-Substitui as antigas `Chamados_TCU` e `Chamados_24x7`, que eram a mesma consulta
-com filtros opostos. A migração do PBIX (uma vez) está em
-[`docs/powerbi-query.md`](docs/powerbi-query.md#7-migração-de-chamados_tcu-e-chamados_24x7).
+Para trocar o endereço do SharePoint, altere apenas `SharePointFeriadosUrl`,
+no topo do `.m`. O link real do `feriados.txt` ainda está **pendente**
+(placeholder `INSERIR_URL_DO_ARQUIVO_FERIADOS_NO_SHAREPOINT`).
 
-O período é automático: os últimos `@CoberturaMeses` meses (padrão **12**) mais
-o mês corrente, pela data escolhida em `@DataReferencia` (padrão `FECHAMENTO`),
-declarada no topo do arquivo.
-
-O bloco de cálculo (`MOTOR VIRTUAL`) é idêntico na referência e no Power BI.
-Mudanças de regra são feitas na referência e copiadas para o arquivo do Power
-BI. Detalhes em [`docs/powerbi-query.md`](docs/powerbi-query.md).
+Documentação: [`powerbi/powerbi-query.md`](powerbi/powerbi-query.md) (arquivos,
+período, colunas, SharePoint, privacidade, gateway, checklist) e
+[`powerbi/documentacao-powerbi-virtual.html`](powerbi/documentacao-powerbi-virtual.html)
+(resumo para o visual HTML Content).
 
 ## Feriados
 
 Os feriados e pontos facultativos ficam no **calendário**
 [`docs/feriados.txt`](docs/feriados.txt), e não no SQL. É um calendário só, o
-do TCU (Portarias do TCU de cada ano), igual para Virtual, Decision e A2B. Para
-incluir um feriado: editar o `feriados.txt` no SharePoint e salvar; a próxima
-atualização do relatório já usa a lista nova, sem mudar o SQL nem republicar.
-Manter igual o `docs/feriados.txt` de todos os repositórios (inclusive o COI)
-e a cópia em `Documentos e Relatórios/feriados.txt`, e conferir com
-`tools/verificar_feriados.ps1`.
+do TCU (Portarias do TCU de cada ano), igual para Virtual TI, Decision e A2B.
+O arquivo é texto simples, com três seções: `## Feriados Fixos` (`DD-MM`, valem
+todo ano), `## Feriados móveis/diferenciados` e `## Pontos Facultativos`
+(`DD-MM-AAAA`, valem só no ano). As regras de preenchimento estão no próprio
+arquivo.
 
-O arquivo é texto simples, em seções: feriados fixos como `DD-MM` (valem todo
-ano), e datas de um ano como `DD-MM-AAAA` (feriados móveis/diferenciados e
-pontos facultativos). A cada nova Portaria do TCU, cadastrar só as datas
-daquele ano, na seção certa, com a Portaria num parágrafo da seção. Formato,
-passo a passo, falhas, Power BI/SharePoint, privacidade e gateway em
-[`docs/feriados.md`](docs/feriados.md).
+Para incluir um feriado: editar o `feriados.txt` no SharePoint e salvar; a
+próxima atualização do relatório já usa a lista nova, sem mudar o SQL nem
+republicar. Manter igual o `docs/feriados.txt` de todos os repositórios
+(Virtual TI, Decision, A2B e COI) e a cópia em
+`Documentos e Relatórios/feriados.txt`, e conferir com
+`tools/verificar_feriados.ps1`.
 
 ## Como validar
 
 1. Rode a referência com o período do mês, pelo `tools/executar_consulta.ps1`.
-2. Confira, por SDM, os marcos (abertura, entrada na Virtual, início,
+2. Confira, por SDM, os marcos (abertura, entrada na Virtual TI, início,
    resolução, fechamento) e as janelas de posse contra o `act_log` do chamado.
    A consulta `support/consulta_logs_chamados_listados.sql` lista todos os
    logs dos SDMs informados.
-3. Para o Power BI, rode a consulta com o mesmo período da referência. Ela
-   deve ter as mesmas linhas e os mesmos valores.
-4. Para reconciliar com o relatório da Virtual, use
-   `analysis/virtual-query-report-analysis.xlsx` (seção *Análise e
-   conferência*).
+3. Para o Power BI, rode a referência com o mesmo período da janela do
+   relatório: as linhas e os valores são os mesmos.
+4. Rode `tools/verificar_feriados.ps1`: calendário válido, cópias iguais e `.m`
+   em dia com a referência.
+5. Para reconciliar com o relatório da Virtual TI, use
+   `analysis/virtual-query-report-analysis.xlsx`.
 
 O total de FAIA ou FARC de um período é a soma de `Indice FAIA` ou
 `Indice FARC` do resultado, Horário TCU e 24x7 juntos (ver
@@ -213,7 +211,7 @@ nada nela é lido pelas consultas.
 
 | Arquivo | Uso |
 |---|---|
-| `analysis/virtual-query-report-analysis.xlsx` | compara, por período (uma aba por período), os SDMs do relatório da Virtual com os SDMs retornados pela consulta, nos dois sentidos: `Relatório` → `Retorna na consulta?` e `Consulta` → `Tem no relatório?`. A coluna `x` é só um separador |
+| `analysis/virtual-query-report-analysis.xlsx` | compara, por período (uma aba por período), os SDMs do relatório da Virtual TI com os SDMs retornados pela consulta, nos dois sentidos: `Relatório` → `Retorna na consulta?` e `Consulta` → `Tem no relatório?`. A coluna `x` é só um separador |
 
 A planilha é apoio de validação humana. Não é entrada do motor nem fonte
 funcional: a população e os cálculos vêm só do SDM.

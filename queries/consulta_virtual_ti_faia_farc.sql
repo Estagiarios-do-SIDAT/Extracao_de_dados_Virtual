@@ -3,13 +3,17 @@ SET NOCOUNT ON;
 SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 
 --------------------------------------------------------------------------------
--- Consulta de referencia FAIA + FARC - Virtual
+-- Consulta de referencia FAIA + FARC - Virtual TI
 --
--- Apuracao do fornecedor Virtual a partir do SDM. Metas, cobertura (Contagem),
+-- Este arquivo e tambem a fonte da consulta do Power BI
+-- (powerbi/consulta_virtual_ti_power_bi.m, gerada por
+-- tools/gerar_powerbi_m.ps1): so o bloco de periodo muda.
+--
+-- Apuracao do fornecedor Virtual TI a partir do SDM. Metas, cobertura (Contagem),
 -- fatores, Horario TCU e 24x7 vem do Edital PE 90028/2025, Anexo VII (Tabelas
 -- 1 e 2, itens 3.1.13 e 3.1.14). A mecanica dos tempos (posse, primeiro
 -- atendimento e Tempo de Atendimento) e a operacional da Decision, adaptada a
--- posse da Virtual. Devolve UM result set com todos os chamados
+-- posse da Virtual TI. Devolve UM result set com todos os chamados
 -- elegiveis; a coluna [Contagem] diz a janela de contagem de cada um (no
 -- Anexo VII, a coluna "Cobertura" da Tabela 1):
 --
@@ -26,28 +30,28 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 --               quais chamados entram; nenhum calculo muda.
 --   Escopo      chamado I/R e, conforme @DataReferencia:
 --               FECHAMENTO (padrao): close_date no periodo, status terminal,
---                 grupo atual 'Fornecedores - Virtual' e ENCERROU na Virtual
+--                 grupo atual 'Fornecedores - Virtual' e ENCERROU na Virtual TI
 --                 (nasceu nela sem transferencia de grupo, ou a ultima
 --                 transferencia de grupo ate o fechamento foi uma entrada na
---                 Virtual).
+--                 Virtual TI).
 --               RESOLUCAO: resolve_date no periodo e a resolucao ocorreu dentro
---                 de uma janela de posse da Virtual. close_date pode ser NULL.
+--                 de uma janela de posse da Virtual TI. close_date pode ser NULL.
 --   Contagem    vem da tabela de parametros pela combinacao Tipo + Prioridade.
---   Posse       janelas em que o chamado esteve no grupo Virtual, pela linha do
+--   Posse       janelas em que o chamado esteve no grupo Virtual TI, pela linha do
 --               tempo de transferencias de grupo. O relogio comeca na primeira
---               entrada (ou na abertura, se nasceu na Virtual), para nas saidas,
+--               entrada (ou na abertura, se nasceu na Virtual TI), para nas saidas,
 --               volta nas reentradas; todas as janelas sao somadas.
 --   Inicio      [CONGELADO] primeira passagem para 'Em andamento' feita
---               enquanto o chamado esta no grupo Virtual. Sem ela, a primeira
+--               enquanto o chamado esta no grupo Virtual TI. Sem ela, a primeira
 --               atividade registrada na posse (act_log, exceto
---               transferencias); sem atividade, a entrada na Virtual.
+--               transferencias); sem atividade, a entrada na Virtual TI.
 --   Tini        [CONGELADO] Tempo Primeiro Atendimento: tempo de posse ate o
 --               Inicio.
 --   Tsol        Tempo de Atendimento (motor operacional da Decision adaptado a
---               posse da Virtual): tempo de posse ate a Resolucao em status
+--               posse da Virtual TI): tempo de posse ate a Resolucao em status
 --               ativo ('Em andamento', 'Aberto, aguarda atendimento' ou
 --               'Reaberto'). Os demais status pausam e vao para Tempo Parada
---               Contagem NMS. Tempo fora da Virtual nao conta.
+--               Contagem NMS. Tempo fora da Virtual TI nao conta.
 --   Resolucao   call_req.resolve_date; se vazio, o ultimo evento RE
 --               (passagem para 'Em homologacao'), desde que o chamado nao esteja
 --               em status de atendimento aberto.
@@ -62,9 +66,10 @@ SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 -- Execute o arquivo INTEIRO. Banco somente leitura: so cria tabelas #.
 --------------------------------------------------------------------------------
 
--- Periodo de apuracao, horario do Brasil, intervalo semiaberto
--- [@DataInicio, @DataFim). Para um mes inteiro, use o dia 1 do mes e o dia 1 do
--- mes seguinte.
+-- >>> PERIODO REFERENCIA ------------------------------------------------------
+-- Periodo de apuracao da consulta de referencia, horario do Brasil, intervalo
+-- semiaberto [@DataInicio, @DataFim). Para um mes inteiro, use o dia 1 do mes e
+-- o dia 1 do mes seguinte.
 DECLARE @DataInicio datetime2(0) = '2026-05-01 00:00:00';
 DECLARE @DataFim    datetime2(0) = '2026-06-01 00:00:00';
 
@@ -72,10 +77,40 @@ DECLARE @DataFim    datetime2(0) = '2026-06-01 00:00:00';
 --   N'FECHAMENTO' = Data/Hora Fechamento (call_req.close_date)
 --   N'RESOLUCAO'  = Data/Hora Resolucao  (call_req.resolve_date)
 DECLARE @DataReferencia nvarchar(20) = N'FECHAMENTO';
+-- <<< PERIODO REFERENCIA ------------------------------------------------------
 
--- >>> MOTOR VIRTUAL ------------------------------------------------------------
--- Bloco identico nos dois arquivos (queries/ e powerbi/). Usa so @DataInicio,
--- @DataFim e @DataReferencia e entrega #Virt_Saida com as duas Contagens.
+-- >>> PERIODO POWER BI --------------------------------------------------------
+-- Periodo da consulta do Power BI (powerbi/consulta_virtual_ti_power_bi.m).
+-- Aqui fica comentado e nao e executado: tools/gerar_powerbi_m.ps1 tira o
+-- bloco PERIODO REFERENCIA acima e ativa este. Para mudar a janela do
+-- relatorio, altere aqui e gere o .m de novo (ou altere o mesmo trecho no
+-- texto SqlTexto do .m, no Editor Avancado do Power BI).
+/*
+-- PARAMETRO EDITAVEL: quantos meses completos entram antes do mes corrente,
+-- pela data escolhida em @DataReferencia. Padrao: 12 = os doze meses
+-- anteriores inteiros + mes corrente ate hoje. Exemplos: 6, 24. E o unico
+-- numero que muda o periodo. Nenhuma regra depende dele.
+DECLARE @CoberturaMeses int = 12;
+
+-- Data que define a janela (troque so esta linha):
+--   N'FECHAMENTO' = Data/Hora Fechamento (call_req.close_date)
+--   N'RESOLUCAO'  = Data/Hora Resolucao  (call_req.resolve_date)
+DECLARE @DataReferencia nvarchar(20) = N'FECHAMENTO';
+
+-- Janela pela data escolhida em @DataReferencia, horario do Brasil, semiaberta:
+--   inicio = dia 1 do mes (corrente - @CoberturaMeses), 00:00
+--   fim    = amanha 00:00, para o dia de hoje entrar inteiro
+DECLARE @HojeBrasil date = CONVERT(date, DATEADD(HOUR, -3, SYSUTCDATETIME()));
+DECLARE @DataInicio datetime2(0) =
+    CONVERT(datetime2(0), DATEADD(MONTH, -@CoberturaMeses, DATEFROMPARTS(YEAR(@HojeBrasil), MONTH(@HojeBrasil), 1)));
+DECLARE @DataFim datetime2(0) = CONVERT(datetime2(0), DATEADD(DAY, 1, @HojeBrasil));
+*/
+-- <<< PERIODO POWER BI --------------------------------------------------------
+
+-- >>> MOTOR VIRTUAL_TI ---------------------------------------------------------
+-- Bloco de calculo, o mesmo na referencia e no Power BI. Usa so @DataInicio,
+-- @DataFim e @DataReferencia (bloco de periodo) e entrega #Virt_Saida com as
+-- duas Contagens.
 
 IF @DataReferencia IS NULL OR @DataReferencia NOT IN (N'RESOLUCAO', N'FECHAMENTO')
 BEGIN
@@ -99,7 +134,7 @@ DECLARE @HoraInicioComercial int = 8;
 DECLARE @HoraFimComercial    int = 20;
 
 --------------------------------------------------------------------------------
--- [1] Parametros da Virtual por Tipo + Prioridade, transcritos do Anexo VII:
+-- [1] Parametros da Virtual TI por Tipo + Prioridade, transcritos do Anexo VII:
 --     Tabela 1 (resposta inicial, resolucao e cobertura = Contagem) e
 --     Tabela 2 (fatores FAIA e FARC, % por hora ou fracao excedida).
 --------------------------------------------------------------------------------
@@ -132,7 +167,7 @@ VALUES
 --
 -- A lista de feriados NAO fica mais neste arquivo. Ela vem do arquivo de
 -- feriados (docs/feriados.txt; no Power BI, a copia no SharePoint), o mesmo
--- calendario do TCU para Virtual, Decision e A2B, pelo parametro @Feriados
+-- calendario do TCU para Virtual TI, Decision e A2B, pelo parametro @Feriados
 -- (JSON):
 --   [{"data":"12-25","descricao":"Natal"},{"data":"2026-04-03","descricao":"..."}]
 --   MM-DD      = feriado fixo, vale todo ano;
@@ -181,12 +216,12 @@ WHERE LEN(f.data) = 5;
 -- [3] Candidatos do periodo, conforme @DataReferencia. Sem substituicao entre
 --     as datas: se a data do modo estiver vazia, o chamado nao entra.
 --     FECHAMENTO: close_date no periodo, I/R, status terminal (mesma lista da
---       Decision, por codigo), com grupo atual Virtual ou alguma transferencia
---       de grupo para a Virtual. A exigencia de o grupo NO FECHAMENTO ser a
---       Virtual (historico de transferencias) e aplicada em [5]/[6.2].
---     RESOLUCAO: resolve_date no periodo, I/R, com grupo atual Virtual ou
---       alguma transferencia de grupo para a Virtual. A exigencia de a
---       resolucao ter ocorrido na posse da Virtual e aplicada em [6.2].
+--       Decision, por codigo), com grupo atual Virtual TI ou alguma transferencia
+--       de grupo para a Virtual TI. A exigencia de o grupo NO FECHAMENTO ser a
+--       Virtual TI (historico de transferencias) e aplicada em [5]/[6.2].
+--     RESOLUCAO: resolve_date no periodo, I/R, com grupo atual Virtual TI ou
+--       alguma transferencia de grupo para a Virtual TI. A exigencia de a
+--       resolucao ter ocorrido na posse da Virtual TI e aplicada em [6.2].
 --------------------------------------------------------------------------------
 IF OBJECT_ID('tempdb..#Virt_Periodo') IS NOT NULL DROP TABLE #Virt_Periodo;
 SELECT
@@ -331,12 +366,12 @@ WHERE (al.[type] IN ('TR', 'SOLN') OR ts.txt_st IS NOT NULL)
 CREATE CLUSTERED INDEX IX_Virt_Log ON #Virt_Log (id, system_time, log_id);
 
 --------------------------------------------------------------------------------
--- [5] Grupo inicial, encerramento na Virtual e movimentos de entrada/saida.
+-- [5] Grupo inicial, encerramento na Virtual TI e movimentos de entrada/saida.
 --     Nasceu no grupo = o grupo de origem da primeira transferencia de grupo e
---     o Virtual; sem transferencia de grupo, vale o grupo atual.
---     Encerrou na Virtual = sem transferencia de grupo (nasceu e ficou), ou a
---     ULTIMA transferencia de grupo ate o fechamento foi uma entrada na Virtual:
---     o grupo NO FECHAMENTO e a Virtual. Transferencia gravada no mesmo segundo
+--     o Virtual TI; sem transferencia de grupo, vale o grupo atual.
+--     Encerrou na Virtual TI = sem transferencia de grupo (nasceu e ficou), ou a
+--     ULTIMA transferencia de grupo ate o fechamento foi uma entrada na Virtual TI:
+--     o grupo NO FECHAMENTO e a Virtual TI. Transferencia gravada no mesmo segundo
 --     do fechamento conta antes dele, salvo se o registro CL desse segundo tiver
 --     act_log.id menor (gravado antes da transferencia).
 --------------------------------------------------------------------------------
@@ -401,7 +436,7 @@ WHERE l.grupo_de = @GrupoVirtualNome
 CREATE CLUSTERED INDEX IX_Virt_Movimento ON #Virt_Movimento (id, movimento, momento);
 
 --------------------------------------------------------------------------------
--- [6] Candidatos com os marcos e o indicador de encerramento na Virtual.
+-- [6] Candidatos com os marcos e o indicador de encerramento na Virtual TI.
 --------------------------------------------------------------------------------
 IF OBJECT_ID('tempdb..#Virt_Candidato') IS NOT NULL DROP TABLE #Virt_Candidato;
 SELECT
@@ -426,8 +461,8 @@ SELECT
     ) AS resolucao_epoch,
     p.close_date AS fechamento_epoch,
     p.resolve_date AS resolve_date_sdm,
-    -- Encerrou na Virtual: sem transferencia de grupo (nasceu e ficou nela) ou a
-    -- ultima transferencia de grupo ate o fechamento foi uma entrada na Virtual.
+    -- Encerrou na Virtual TI: sem transferencia de grupo (nasceu e ficou nela) ou a
+    -- ultima transferencia de grupo ate o fechamento foi uma entrada na Virtual TI.
     CASE WHEN (gi.grupo_ultima_transferencia IS NULL AND gi.grupo_inicial = @GrupoVirtualNome)
            OR gi.grupo_ultima_transferencia = @GrupoVirtualNome
          THEN 1 ELSE 0 END AS encerrou_virtual
@@ -437,7 +472,7 @@ JOIN #Virt_GrupoInicial AS gi
     ON gi.id = p.id
 JOIN dbo.cr_stat AS sa
     ON sa.code = p.status
--- Primeira entrada na Virtual: a abertura, se nasceu nela; senao a primeira
+-- Primeira entrada na Virtual TI: a abertura, se nasceu nela; senao a primeira
 -- transferencia para o grupo.
 OUTER APPLY (
     SELECT MIN(m.momento) AS entrada_epoch
@@ -446,7 +481,7 @@ OUTER APPLY (
       AND m.movimento = 'E'
 ) AS ent
 -- Inicio (captura): primeira passagem para 'Em andamento', com o chamado dentro
--- de uma passagem pelo grupo Virtual (entrada antes do evento e nenhuma saida
+-- de uma passagem pelo grupo Virtual TI (entrada antes do evento e nenhuma saida
 -- entre a entrada e o evento, inclusive no mesmo segundo).
 OUTER APPLY (
     SELECT MIN(l.system_time) AS inicio_epoch
@@ -508,14 +543,14 @@ OUTER APPLY (
 CREATE UNIQUE CLUSTERED INDEX IX_Virt_Candidato ON #Virt_Candidato (id);
 
 --------------------------------------------------------------------------------
--- [6.1] Janelas de posse da Virtual.
+-- [6.1] Janelas de posse da Virtual TI.
 --     Linha do tempo de grupo: a abertura (no grupo inicial) e cada
 --     transferencia de grupo, em ordem de system_time e act_log.id. Cada trecho
---     vai de um evento ao seguinte; ficam os trechos em que o grupo e o Virtual.
---     Fora da Virtual nao conta; saida para o relogio; reentrada o religa;
---     todas as janelas sao somadas. Quem nasceu na Virtual tem a primeira
+--     vai de um evento ao seguinte; ficam os trechos em que o grupo e o Virtual TI.
+--     Fora da Virtual TI nao conta; saida para o relogio; reentrada o religa;
+--     todas as janelas sao somadas. Quem nasceu na Virtual TI tem a primeira
 --     janela iniciando na abertura. Janela sem fim (fim NULL) = o chamado
---     continuava na Virtual no ultimo evento lido.
+--     continuava na Virtual TI no ultimo evento lido.
 --------------------------------------------------------------------------------
 IF OBJECT_ID('tempdb..#Virt_LinhaGrupo') IS NOT NULL DROP TABLE #Virt_LinhaGrupo;
 SELECT
@@ -545,7 +580,7 @@ SELECT
     x.momento AS ini_epoch,
     x.proximo AS fim_epoch,
     DATEADD(HOUR, -@HorasBrasilParaUTC, DATEADD(SECOND, x.momento, @Epoch)) AS ini,
-    DATEADD(HOUR, -@HorasBrasilParaUTC, DATEADD(SECOND, x.proximo, @Epoch)) AS fim -- NULL = ainda na Virtual
+    DATEADD(HOUR, -@HorasBrasilParaUTC, DATEADD(SECOND, x.proximo, @Epoch)) AS fim -- NULL = ainda na Virtual TI
 INTO #Virt_Janela
 FROM (
     SELECT
@@ -558,10 +593,10 @@ WHERE x.na_virtual = 1
 CREATE CLUSTERED INDEX IX_Virt_Janela ON #Virt_Janela (id, passagem);
 
 --------------------------------------------------------------------------------
--- [6.2] Chamados da Virtual: responsabilidade validada no marco escolhido.
---     FECHAMENTO: encerrou na Virtual (cadeia de transferencias ate o
+-- [6.2] Chamados da Virtual TI: responsabilidade validada no marco escolhido.
+--     FECHAMENTO: encerrou na Virtual TI (cadeia de transferencias ate o
 --       fechamento).
---     RESOLUCAO: resolve_date dentro de uma janela de posse da Virtual,
+--     RESOLUCAO: resolve_date dentro de uma janela de posse da Virtual TI,
 --       limites inclusivos; janela sem fim vale ate qualquer instante posterior.
 --------------------------------------------------------------------------------
 IF OBJECT_ID('tempdb..#Virt_Chamado') IS NOT NULL DROP TABLE #Virt_Chamado;
@@ -580,7 +615,7 @@ WHERE (@DataReferencia = N'FECHAMENTO' AND c.encerrou_virtual = 1)
 CREATE UNIQUE CLUSTERED INDEX IX_Virt_Chamado ON #Virt_Chamado (id);
 
 --------------------------------------------------------------------------------
--- [6.3] Data de Encerramento Virtual: ultimo encerramento da atuacao da Virtual,
+-- [6.3] Data de Encerramento Virtual TI: ultimo encerramento da atuacao da Virtual TI,
 --       como a Data de Encerramento Decision. Encerramento = evento de status
 --       (ST, RE, RO, CL...) com DESTINO 'Em homologacao' (codigo EMHOM) ou SOLN,
 --       que a Decision trata como entrada implicita em homologacao. Vale so a
@@ -704,7 +739,7 @@ WHERE DATEDIFF(DAY, '19000101', d.Dia) % 7 < 5
 
 --------------------------------------------------------------------------------
 -- [9] Status ativos e trechos ate os marcos (motor operacional, Decision
---     adaptada a posse da Virtual).
+--     adaptada a posse da Virtual TI).
 --     Linha do tempo de status do chamado: na abertura vale a origem do
 --     primeiro evento de status (sem evento, 'Aberto, aguarda atendimento'); cada
 --     evento de status (ST, RE, RO, CL...) passa a valer o status de destino ate
@@ -952,7 +987,7 @@ SELECT
         END
     )) AS [Responsável Atendimento],
     ic.resource_name AS [Item de Configuração],
-    m.entrada AS [Data Entrada Grupo Virtual],
+    m.entrada AS [Data Entrada Grupo Virtual TI],
     -- Tempo de posse ate a Resolucao em status que pausam (Anexo VII 6.19.13:
     -- tempo total de parada de contagem de NMS).
     f.parada AS [Tempo Parada Contagem NMS (h)],
@@ -984,7 +1019,7 @@ SELECT
          ELSE COALESCE(gres.grupo_para, gi.grupo_inicial) END AS [Grupo],
     -- Indicador de Agendamento: houve ao menos uma transicao com DESTINO
     -- 'Agendado' (em qualquer registro de status do act_log) dentro da posse da
-    -- Virtual, com o mesmo criterio de posse do Inicio. Informativo: nao muda
+    -- Virtual TI, com o mesmo criterio de posse do Inicio. Informativo: nao muda
     -- tempo, excesso nem indice.
     CASE WHEN EXISTS (
             SELECT 1
@@ -1009,9 +1044,9 @@ SELECT
                       )
               )
          ) THEN N'Sim' ELSE N'Não' END AS [Indicador de Agendamento],
-    -- Data de Encerramento Virtual: bloco [6.3]. Nao e o fechamento (close_date)
+    -- Data de Encerramento Virtual TI: bloco [6.3]. Nao e o fechamento (close_date)
     -- nem substitui a Resolucao.
-    m.encerramento_virtual AS [Data de Encerramento Virtual]
+    m.encerramento_virtual AS [Data de Encerramento Virtual TI]
 INTO #Virt_Saida
 FROM #Virt_Marco AS m
 JOIN #Virt_Calculo AS c
@@ -1056,7 +1091,7 @@ CROSS APPLY (
         parada    = CASE WHEN c.parada_s    IS NULL THEN NULL ELSE CONCAT(c.parada_s    / 3600, N':', RIGHT(CONCAT(N'0', c.parada_s    % 3600 / 60), 2), N':', RIGHT(CONCAT(N'0', c.parada_s    % 60), 2)) END
 ) AS f;
 
--- <<< MOTOR VIRTUAL ------------------------------------------------------------
+-- <<< MOTOR VIRTUAL_TI ---------------------------------------------------------
 
 --------------------------------------------------------------------------------
 -- Resultado unico: Horario TCU e 24x7 juntos; [Contagem] separa.
@@ -1091,7 +1126,7 @@ SELECT
     [Responsável Abertura],
     [Responsável Atendimento],
     [Item de Configuração],
-    [Data Entrada Grupo Virtual],
+    [Data Entrada Grupo Virtual TI],
     [Tempo Parada Contagem NMS (h)],
     [Meta Primeiro Atendimento],
     [Indicador Reabertura],
@@ -1101,6 +1136,6 @@ SELECT
     [Situação Meta Resolução],
     [Grupo],
     [Indicador de Agendamento],
-    [Data de Encerramento Virtual]
+    [Data de Encerramento Virtual TI]
 FROM #Virt_Saida
 ORDER BY [Data/Hora Fechamento], [ID Chamado];

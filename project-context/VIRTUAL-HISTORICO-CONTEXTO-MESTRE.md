@@ -1162,3 +1162,79 @@ Atendimento, FAIA e FARC. `.m` regenerado e executado no motor do Power BI
 Desktop (Organizacional + Organizacional, firewall ativo): M = SQL do Power BI
 (282 linhas, 40 colunas). SHA256 do motor (muda só pelo comentário do bloco
 `[2]`): `1943c0bf0c13bb9d06607a469de4820ff29001ba4cc5887044d3fcad5735a2fe`.
+
+### 2026-10-07 — consolidação: Power BI único, nomenclatura Virtual TI, calendário
+
+Organização e nomenclatura; nenhum cálculo mudou.
+
+Consulta do Power BI única: `powerbi/consulta_virtual_chamados_power_bi.sql`
+(cópia manual do motor) e o `.m` antigo saíram. O `.m` passou a ser gerado
+direto da referência, renomeada para `queries/consulta_virtual_ti_faia_farc.sql`,
+que traz dois blocos de período: `PERIODO REFERENCIA` (datas digitadas) e
+`PERIODO POWER BI` (janela móvel, comentado); o gerador troca um pelo outro.
+Nova consulta do Power BI: `powerbi/consulta_virtual_ti_power_bi.m`. Marcadores
+do motor: `MOTOR VIRTUAL_TI` (SHA256 LF
+`b4a9fb90720c7c2898926755987c7e0b92a9a63b2e203a5767cac0b2ed6f446d`).
+
+Nomenclatura: texto humano "Virtual TI" (README, docs, comentários do SQL,
+HTML); colunas `Data Entrada Grupo Virtual TI` e
+`Data de Encerramento Virtual TI` (antes sem "TI"). Preservados: o literal do
+SDM `Fornecedores - Virtual` (grupo, filtros e valor da coluna `Grupo`), os
+identificadores técnicos existentes (`@GrupoVirtual`, `#Virt_*`), o nome do
+repositório e o deste histórico. `Categoria` e `Resumo` já existiam.
+
+Documentação do Power BI em `powerbi/`: `powerbi-query.md` (movido de
+`docs/`) e o novo `documentacao-powerbi-virtual.html` (autocontido).
+
+Calendário: `docs/feriados.txt` ficou com só três seções (`## Feriados
+Fixos`, `## Feriados móveis/diferenciados`, `## Pontos Facultativos`); saíram a
+seção `## Regras` (o texto virou introdução antes da primeira seção), a seção
+`## Feriados Por Data` (sem datas), o parágrafo das cópias e os blocos
+`Fontes:` de cada ano. Mesmas 35 datas: o JSON enviado ao SQL em `@Feriados` é
+idêntico, byte a byte, ao da rodada anterior; de 2025-01-01 a 2027-12-31, 53
+datas de feriado/ponto facultativo e 357 dias fora do Horário TCU antes e
+depois. `docs/feriados.md` foi removido (um arquivo de feriados por
+repositório); o que era próprio do Power BI (SharePoint, privacidade, gateway,
+falhas, checklist) foi para `powerbi/powerbi-query.md`. Leitor
+(`tools/feriados.ps1`) e Power Query aceitam só as três seções. Cinco cópias
+idênticas: `docs/feriados.txt` de Decision, A2B, COI e Virtual e
+`Documentos e Relatórios/feriados.txt` (SHA-256 `1a97965ec7e003f1addfbc13af0f497bf45cec05b66d05c9ce98323d1365592b`).
+
+SharePoint: o `.m` tem uma única variável no topo, `SharePointFeriadosUrl`
+(bloco `CONFIGURACAO - SHAREPOINT`); para trocar o endereço, altere apenas
+ela. O link real do `feriados.txt` **continua pendente**: procurados os
+repositórios, o histórico e `Documentos e Relatórios` (inclusive dentro das
+planilhas); só apareceram endereços de onde planilhas de análise foram salvas
+(pastas pessoais e o site `EstgioSidatTCU`), nenhum do `feriados.txt`. O
+placeholder `INSERIR_URL_DO_ARQUIVO_FERIADOS_NO_SHAREPOINT` foi mantido.
+
+Regressão contra `2acdff6` (mesmo instante, leitor e calendário de antes x de
+agora): referência maio/2026 (19), 01/2025–10/2026 por fechamento (282) e por
+resolução (294), e o SQL do Power BI de 12 meses (282): mesmas linhas e 0
+diferenças em todas as 40 colunas (Primeiro Atendimento, Tempo Primeiro
+Atendimento, Tempo de Atendimento, excessos, metas, FAIA, FARC, Contagem,
+Situação Meta Resolução), com os dois nomes de coluna renomeados. `.m`
+executado no motor do Power BI Desktop (Organizacional + Organizacional,
+firewall ativo): igual ao SQL (282 linhas, 40 colunas).
+
+Referência das Portarias do calendário (migrada de `docs/feriados.md`, que
+foi removido; o `feriados.txt` não traz mais as fontes por bloco):
+
+| Ano | Portaria | Código de autenticidade (BTCU) | O que define |
+|---|---|---|---|
+| 2025 | Portaria-TCU nº 10, de 13/01/2025 | 77411949 | calendário de 2025 |
+| 2025 | Portaria-TCU nº 67, de 28/04/2025 | 77981373 | inclui 02/05/2025 |
+| 2025 | Portaria-TCU nº 157, de 30/10/2025 | 79190602 | inclui 21/11/2025 |
+| 2025 | Portaria-TCU nº 176, de 19/12/2025 | 79506777 | inclui 26/12/2025 |
+| 2026 | Portaria-TCU nº 179, de 19/12/2025 | 79506777 | define 02/01/2026 |
+| 2026 | Portaria-TCU nº 1, de 08/01/2026 | 79561193 | calendário de 2026 |
+| 2026 | Portaria-TCU nº 93, de 25/06/2026 | 80587034 | inclui 29/06/2026 (jogo da Seleção na Copa) |
+
+Consulta: `www.tcu.gov.br/autenticidade` (PDF em
+`https://btcu.apps.tcu.gov.br/api/obterDocumentoPdf/<código>`). Datas por
+seção: fixos 01-01, 21-04, 01-05, 07-09, 12-10, 02-11, 15-11, 20-11, 25-12;
+móveis 18-04-2025 e 03-04-2026 (Paixão de Cristo); pontos facultativos 2025:
+03-03, 04-03, 05-03, 17-04, 02-05, 19-06, 20-06, 27-10, 21-11, 24-12, 26-12,
+31-12; 2026: 02-01, 16-02, 17-02, 18-02, 02-04, 20-04, 04-06, 05-06, 29-06,
+28-10, 24-12, 31-12. Ao sair uma Portaria nova, registrar aqui número, data e
+código.

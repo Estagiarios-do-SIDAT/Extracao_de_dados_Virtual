@@ -11,9 +11,10 @@ USE mdb;
 --   hold = 1 -> SUSPENSO -> status que para o relogio de SLA do SDM
 --   hold = 0 -> ATIVO    -> status em que o relogio corre
 --
--- Na apuracao da Virtual nenhum status suspende a contagem: Tini e Tsol sao
--- medidos de abertura a inicio e a resolucao (docs/virtual-calculation.md,
--- secao 9). Esta consulta serve para investigar chamados e conferir codigos.
+-- A apuracao da Virtual TI nao usa cr_stat.hold: o Tempo de Atendimento (Tsol)
+-- conta uma lista explicita de status ativos, dentro da posse da Virtual TI
+-- (docs/virtual-calculation.md, secao 7.2). Esta consulta serve para
+-- investigar chamados e conferir codigos.
 --------------------------------------------------------------------------------
 
 -- [1] Todos os status e sua classificacao
