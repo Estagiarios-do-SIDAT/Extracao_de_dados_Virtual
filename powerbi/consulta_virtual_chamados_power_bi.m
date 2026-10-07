@@ -756,30 +756,24 @@ WHERE DATEDIFF(DAY, '19000101', d.Dia) % 7 < 5
   AND NOT EXISTS (SELECT 1 FROM #Virt_FeriadoAnual AS k WHERE k.MesDia = RIGHT(CONVERT(char(10), d.Dia, 23), 5));
 
 --------------------------------------------------------------------------------
--- [9] Linha do tempo de status e trechos ate os marcos.
---     Na abertura vale a origem do primeiro evento de status (sem evento,
---     'Aberto, aguarda atendimento'); cada evento de status (ST, RE, RO, CL...)
---     passa a valer o status de destino ate o proximo, em ordem de system_time
---     e act_log.id. O SOLN nao grava destino e nao muda a linha.
---     Classe de cada trecho de status:
---       H = homologacao: 'Em homologacao' (EMHOM) e 'Em homologacao pelo
---           fiscal' (CQ). Nao conta no Tsol (Anexo VII 3.1.8). No SDM o T2
---           (resolve_date) e a entrada em 'Em homologacao'; antes do T2 so ha
---           homologacao quando a solucao foi recusada e o chamado voltou ao
---           atendimento.
---       A = 'Agendado' (AGENDADO): conta no Tsol. A suspensao por agendamento
---           depende de acordo previo com o TCU (3.4.4, 3.6.1.2), que o SDM nao
---           registra; o tempo sai na coluna informativa Tempo Agendado.
---       C = qualquer outro status: conta. O contrato nao suspende a contagem
---           por status ('Aguarda atendimento', 'Reaberto', esperas...); a
---           interrupcao e a criterio do TCU (3.6.1).
+-- [9] Status ativos e trechos ate os marcos (motor operacional, Decision
+--     adaptada a posse da Virtual).
+--     Linha do tempo de status do chamado: na abertura vale a origem do
+--     primeiro evento de status (sem evento, 'Aberto, aguarda atendimento'); cada
+--     evento de status (ST, RE, RO, CL...) passa a valer o status de destino ate
+--     o proximo, em ordem de system_time e act_log.id. Um SOLN e uma entrada
+--     implicita em status nao ativo, como na Decision. Ativos: 'Em andamento'
+--     (FIP), 'Aberto, aguarda atendimento' (OP) e 'Reaberto' (REAB; orientacao
+--     do gerente de 2026-10-06: a reabertura corrige um encerramento indevido e
+--     o tempo conta). Os demais (Aguarda atendimento, Agendado, Em
+--     homologacao...) pausam o Tempo de Atendimento.
 --------------------------------------------------------------------------------
 IF OBJECT_ID('tempdb..#Virt_StatusLinha') IS NOT NULL DROP TABLE #Virt_StatusLinha;
 SELECT
     c.id,
     c.abertura_epoch AS momento,
     0 AS ordem,
-    ISNULL(pe.code_de, 'OP') AS code
+    CASE WHEN pe.code_de IS NULL OR pe.code_de IN ('FIP', 'OP', 'REAB') THEN 1 ELSE 0 END AS ativo
 INTO #Virt_StatusLinha
 FROM #Virt_Chamado AS c
 OUTER APPLY (
@@ -796,38 +790,34 @@ SELECT
     l.id,
     l.system_time,
     l.log_id,
-    sd.code
+    CASE WHEN sd.code IN ('FIP', 'OP', 'REAB') THEN 1 ELSE 0 END
 FROM #Virt_Log AS l
 JOIN #Virt_Chamado AS c
     ON c.id = l.id
 LEFT JOIN dbo.cr_stat AS sd
     ON sd.sym = l.status_para COLLATE DATABASE_DEFAULT
-WHERE l.status_para IS NOT NULL;
+WHERE l.status_para IS NOT NULL
+   OR l.[type] = 'SOLN'; -- SOLN: sem destino gravado, fica nao ativo
 
-IF OBJECT_ID('tempdb..#Virt_StatusTrecho') IS NOT NULL DROP TABLE #Virt_StatusTrecho;
+IF OBJECT_ID('tempdb..#Virt_StatusAtivo') IS NOT NULL DROP TABLE #Virt_StatusAtivo;
 SELECT
     x.id,
-    CASE WHEN x.code IN ('EMHOM', 'CQ') THEN 'H' -- Em homologacao / pelo fiscal
-         WHEN x.code = 'AGENDADO'       THEN 'A' -- Agendado
-         ELSE 'C' END AS classe,
     DATEADD(HOUR, -@HorasBrasilParaUTC, DATEADD(SECOND, x.momento, @Epoch)) AS ini,
-    DATEADD(HOUR, -@HorasBrasilParaUTC, DATEADD(SECOND, x.proximo, @Epoch)) AS fim -- NULL = status vigente no ultimo evento lido
-INTO #Virt_StatusTrecho
+    DATEADD(HOUR, -@HorasBrasilParaUTC, DATEADD(SECOND, x.proximo, @Epoch)) AS fim -- NULL = ainda ativo
+INTO #Virt_StatusAtivo
 FROM (
     SELECT
-        s.id, s.momento, s.ordem, s.code,
+        s.id, s.momento, s.ordem, s.ativo,
         LEAD(s.momento) OVER (PARTITION BY s.id ORDER BY s.momento, s.ordem) AS proximo
     FROM #Virt_StatusLinha AS s
 ) AS x
-WHERE x.proximo IS NULL OR x.proximo > x.momento;
-CREATE CLUSTERED INDEX IX_Virt_StatusTrecho ON #Virt_StatusTrecho (id, ini);
+WHERE x.ativo = 1
+  AND (x.proximo IS NULL OR x.proximo > x.momento);
+CREATE CLUSTERED INDEX IX_Virt_StatusAtivo ON #Virt_StatusAtivo (id, ini);
 
--- Trechos ate o marco:
---   R = posse ate o Inicio (Tini, congelado);
---   T = posse ate a Resolucao (base do Tempo Fora Grupo Virtual);
---   S = de T0 ate a Resolucao, em status que contam (C e A): Tsol;
---   H = de T0 ate a Resolucao, em homologacao: Tempo Parada Contagem NMS;
---   A = de T0 ate a Resolucao, em Agendado: Tempo Agendado (contido no S).
+-- Trechos de posse ate o marco: R = ate o Inicio (resposta); T = ate a
+-- Resolucao (posse total, base do Tempo suspenso); S = ate a Resolucao e so em
+-- status ativo (Tempo de Atendimento).
 IF OBJECT_ID('tempdb..#Virt_Trecho') IS NOT NULL DROP TABLE #Virt_Trecho;
 SELECT
     j.id,
@@ -844,48 +834,37 @@ WHERE k.marco IS NOT NULL
 
 INSERT INTO #Virt_Trecho (id, medida, a, b)
 SELECT
-    s.id,
-    k.medida,
+    j.id,
+    'S',
     lim.a,
     lim.b
-FROM #Virt_StatusTrecho AS s
+FROM #Virt_Janela AS j
 JOIN #Virt_Marco AS m
-    ON m.id = s.id
+    ON m.id = j.id
+JOIN #Virt_StatusAtivo AS sa
+    ON sa.id = j.id
 CROSS APPLY (
     SELECT
-        a = CASE WHEN s.ini > m.abertura THEN s.ini ELSE m.abertura END,
-        b = CASE WHEN s.fim IS NULL OR s.fim > m.resolucao THEN m.resolucao ELSE s.fim END
+        a = (SELECT MAX(v) FROM (VALUES (j.ini), (sa.ini)) AS x (v)),
+        b = (SELECT MIN(v) FROM (VALUES (j.fim), (sa.fim), (m.resolucao)) AS x (v))
 ) AS lim
-CROSS APPLY (
-    SELECT 'S' WHERE s.classe IN ('C', 'A')
-    UNION ALL
-    SELECT 'H' WHERE s.classe = 'H'
-    UNION ALL
-    SELECT 'A' WHERE s.classe = 'A'
-) AS k (medida)
 WHERE m.resolucao IS NOT NULL
   AND lim.a < lim.b;
 CREATE CLUSTERED INDEX IX_Virt_Trecho ON #Virt_Trecho (id, medida);
 
 --------------------------------------------------------------------------------
--- [10] Tempos em segundos, somados sobre os trechos.
---      Tini = posse ate o Inicio (congelado). Tsol = de T0 ate a Resolucao,
---      sem homologacao. Tempo Parada Contagem NMS = homologacao ate a
---      Resolucao (Tsol + parada = Resolucao - T0). Tempo Agendado = Agendado
---      ate a Resolucao (ja contado no Tsol). Tempo Fora Grupo Virtual = de T0
---      ate a Resolucao, fora das janelas de posse (ja contado no Tsol).
---      Horas Horario TCU = parte do Tini e do Tsol dentro do Horario TCU, nas
---      duas Contagens; o excesso so usa essas horas na Contagem Horario TCU.
+-- [10] Tempos em segundos, somados sobre os trechos. Tini = posse ate o
+--      Inicio; Tsol = posse em status ativo ate a Resolucao; posse total ate a
+--      Resolucao para o Tempo Parada Contagem NMS. As horas no Horario TCU sao
+--      calculadas nas duas Contagens (informativas na 24x7, cujo excesso e
+--      medido sobre o corrido).
 --------------------------------------------------------------------------------
 IF OBJECT_ID('tempdb..#Virt_Tempo') IS NOT NULL DROP TABLE #Virt_Tempo;
 SELECT
     m.id,
     CASE WHEN m.inicio IS NULL THEN NULL ELSE ISNULL(cor.resp, 0) END AS tini_s,
     CASE WHEN m.resolucao IS NULL THEN NULL ELSE ISNULL(cor.sol, 0) END AS tsol_s,
-    CASE WHEN m.resolucao IS NULL THEN NULL ELSE ISNULL(cor.homol, 0) END AS parada_s,
-    CASE WHEN m.resolucao IS NULL THEN NULL ELSE ISNULL(cor.agend, 0) END AS agendado_s,
-    CASE WHEN m.resolucao IS NULL THEN NULL
-         ELSE DATEDIFF_BIG(SECOND, m.abertura, m.resolucao) - ISNULL(cor.posse, 0) END AS fora_s,
+    CASE WHEN m.resolucao IS NULL THEN NULL ELSE ISNULL(cor.posse, 0) END AS posse_sol_s,
     CASE WHEN m.inicio IS NULL THEN NULL ELSE ISNULL(com.resp, 0) END AS com_resp_s,
     CASE WHEN m.resolucao IS NULL THEN NULL ELSE ISNULL(com.sol, 0) END AS com_sol_s
 INTO #Virt_Tempo
@@ -894,8 +873,6 @@ OUTER APPLY (
     SELECT
         SUM(CASE WHEN t.medida = 'R' THEN DATEDIFF_BIG(SECOND, t.a, t.b) END) AS resp,
         SUM(CASE WHEN t.medida = 'S' THEN DATEDIFF_BIG(SECOND, t.a, t.b) END) AS sol,
-        SUM(CASE WHEN t.medida = 'H' THEN DATEDIFF_BIG(SECOND, t.a, t.b) END) AS homol,
-        SUM(CASE WHEN t.medida = 'A' THEN DATEDIFF_BIG(SECOND, t.a, t.b) END) AS agend,
         SUM(CASE WHEN t.medida = 'T' THEN DATEDIFF_BIG(SECOND, t.a, t.b) END) AS posse
     FROM #Virt_Trecho AS t
     WHERE t.id = m.id
@@ -916,7 +893,6 @@ OUTER APPLY (
            AND t.b > u.InicioCom
            AND t.a < u.FimCom
         WHERE t.id = m.id
-          AND t.medida IN ('R', 'S')
     ) AS d
 ) AS com;
 CREATE UNIQUE CLUSTERED INDEX IX_Virt_Tempo ON #Virt_Tempo (id);
@@ -925,9 +901,7 @@ CREATE UNIQUE CLUSTERED INDEX IX_Virt_Tempo ON #Virt_Tempo (id);
 -- [11] Calculo numerico, em segundos. Excesso por chamado = Max(T | Meta) -
 --      Meta (Anexo VII, Equacoes 1 e 4): Contagem Horario TCU sobre as horas
 --      dentro do Horario TCU; 24x7 sobre o tempo corrido. Indice = horas de
---      excesso (6 casas) x fator (Equacoes 2 e 5), em pontos percentuais. O
---      somatorio por item, tipo e prioridade e o arredondamento do somatorio em
---      duas casas (1.3.1, 1.3.2) sao feitos na consolidacao, fora desta consulta.
+--      excesso (6 casas) x fator (Equacoes 2 e 5), em pontos percentuais.
 --------------------------------------------------------------------------------
 IF OBJECT_ID('tempdb..#Virt_Calculo') IS NOT NULL DROP TABLE #Virt_Calculo;
 SELECT
@@ -942,9 +916,9 @@ SELECT
     mt.meta_sol_s,
     x.exc_resp_s,
     x.exc_sol_s,
-    t.parada_s,
-    t.agendado_s,
-    t.fora_s,
+    -- Tempo Parada Contagem NMS: tempo de posse ate a Resolucao em status nao
+    -- ativo (corrido). Tsol + parada = posse total ate a Resolucao.
+    t.posse_sol_s - t.tsol_s AS parada_s,
     CONVERT(decimal(18,6), CONVERT(decimal(18,6), x.exc_sol_s  / 3600.0000000000) * m.FatorFARC) AS indice_farc,
     CONVERT(decimal(18,6), CONVERT(decimal(18,6), x.exc_resp_s / 3600.0000000000) * m.FatorFAIA) AS indice_faia
 INTO #Virt_Calculo
@@ -1032,13 +1006,9 @@ SELECT
     )) AS [Responsável Atendimento],
     ic.resource_name AS [Item de Configuração],
     m.entrada AS [Data Entrada Grupo Virtual],
-    -- Anexo VII 6.19.13: tempo total de parada de contagem de NMS (aqui, so a
-    -- homologacao antes da Resolucao). Tempo Agendado e Tempo Fora Grupo
-    -- Virtual sao informativos: ja estao no Tsol e so saem dele se o TCU
-    -- reconhecer a suspensao (3.6.1).
+    -- Tempo de posse ate a Resolucao em status que pausam (Anexo VII 6.19.13:
+    -- tempo total de parada de contagem de NMS).
     f.parada AS [Tempo Parada Contagem NMS (h)],
-    f.agendado AS [Tempo Agendado (h)],
-    f.fora AS [Tempo Fora Grupo Virtual (h)],
     CASE WHEN c.exc_resp_s IS NULL THEN N'N/A'
          WHEN c.exc_resp_s > 0 THEN N'Não Atende'
          ELSE N'Atende' END AS [Meta Primeiro Atendimento],
@@ -1136,9 +1106,7 @@ CROSS APPLY (
         meta_sol  = CASE WHEN c.meta_sol_s  IS NULL THEN NULL ELSE CONCAT(c.meta_sol_s  / 3600, N':', RIGHT(CONCAT(N'0', c.meta_sol_s  % 3600 / 60), 2), N':', RIGHT(CONCAT(N'0', c.meta_sol_s  % 60), 2)) END,
         exc_resp  = CASE WHEN c.exc_resp_s  IS NULL THEN NULL ELSE CONCAT(c.exc_resp_s  / 3600, N':', RIGHT(CONCAT(N'0', c.exc_resp_s  % 3600 / 60), 2), N':', RIGHT(CONCAT(N'0', c.exc_resp_s  % 60), 2)) END,
         exc_sol   = CASE WHEN c.exc_sol_s   IS NULL THEN NULL ELSE CONCAT(c.exc_sol_s   / 3600, N':', RIGHT(CONCAT(N'0', c.exc_sol_s   % 3600 / 60), 2), N':', RIGHT(CONCAT(N'0', c.exc_sol_s   % 60), 2)) END,
-        parada    = CASE WHEN c.parada_s    IS NULL THEN NULL ELSE CONCAT(c.parada_s    / 3600, N':', RIGHT(CONCAT(N'0', c.parada_s    % 3600 / 60), 2), N':', RIGHT(CONCAT(N'0', c.parada_s    % 60), 2)) END,
-        agendado  = CASE WHEN c.agendado_s  IS NULL THEN NULL ELSE CONCAT(c.agendado_s  / 3600, N':', RIGHT(CONCAT(N'0', c.agendado_s  % 3600 / 60), 2), N':', RIGHT(CONCAT(N'0', c.agendado_s  % 60), 2)) END,
-        fora      = CASE WHEN c.fora_s      IS NULL THEN NULL ELSE CONCAT(c.fora_s      / 3600, N':', RIGHT(CONCAT(N'0', c.fora_s      % 3600 / 60), 2), N':', RIGHT(CONCAT(N'0', c.fora_s      % 60), 2)) END
+        parada    = CASE WHEN c.parada_s    IS NULL THEN NULL ELSE CONCAT(c.parada_s    / 3600, N':', RIGHT(CONCAT(N'0', c.parada_s    % 3600 / 60), 2), N':', RIGHT(CONCAT(N'0', c.parada_s    % 60), 2)) END
 ) AS f;
 
 -- <<< MOTOR VIRTUAL ------------------------------------------------------------
@@ -1178,8 +1146,6 @@ SELECT
     [Item de Configuração],
     [Data Entrada Grupo Virtual],
     [Tempo Parada Contagem NMS (h)],
-    [Tempo Agendado (h)],
-    [Tempo Fora Grupo Virtual (h)],
     [Meta Primeiro Atendimento],
     [Indicador Reabertura],
     [Acordo Prazo],
