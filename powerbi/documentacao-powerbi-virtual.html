@@ -76,7 +76,8 @@ powerbi/consulta_virtual_ti_power_bi.m     (Power BI: últimos 12 meses + feriad
 <h2>5. Como funciona o calendário</h2>
 <ul>
 <li>O arquivo usado é o <b>feriados.txt</b>: no SharePoint para o painel; a cópia versionada é docs/feriados.txt. É o mesmo calendário do TCU para Virtual TI, Decision e A2B.</li>
-<li>Três seções: <b>Feriados Fixos</b> (formato DD-MM, valem todo ano), <b>Feriados móveis/diferenciados</b> e <b>Pontos Facultativos</b> (formato DD-MM-AAAA, valem só naquele ano). Uma data por linha.</li>
+<li>Três seções: <b>Feriados Fixos</b> (formato DD-MM, valem todo ano), <b>Feriados móveis/diferenciados</b> (Paixão de Cristo, feriado nacional) e <b>Pontos Facultativos</b> (Carnaval, Quarta-Feira de Cinzas, Corpus Christi, emendas e vésperas), no formato DD-MM-AAAA, valendo só naquele ano. A seção segue a classificação da Portaria do TCU.</li>
+<li>Cada data <b>sozinha na linha</b>: uma data com comentário na mesma linha é ignorada sem aviso. Não crie, renomeie nem traduza os três títulos de seção (linhas que começam com ##).</li>
 <li>Uma data cadastrada fica inteira fora do Horário TCU. Sábado e domingo nunca estão no Horário TCU.</li>
 <li>Para incluir uma data: editar o feriados.txt no SharePoint e salvar. A próxima atualização já usa a lista nova, sem mudar o SQL.</li>
 <li>Data inválida, repetida, fora do formato ou fora da seção certa <b>interrompe a atualização</b> com a linha do problema. O painel nunca é calculado sem feriados.</li>

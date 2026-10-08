@@ -272,8 +272,10 @@ inválida, a consulta para com erro: nunca calcula com zero feriados.
   Não existe contagem parcial de dia: um dia útil vale das 08:00 às 20:00
   inteiro.
 - Sábado e domingo nunca estão no Horário TCU.
-- Hoje o arquivo tem 35 linhas: os 9 feriados nacionais fixos (todo ano) e
+- Hoje o arquivo tem 35 datas: os 9 feriados nacionais fixos (todo ano) e
   13 datas de 2025 e 13 de 2026, das Portarias do TCU.
+- Formato e regras de leitura: no próprio `feriados.txt` e em
+  `powerbi/powerbi-query.md`, seção 6.
 
 Até 2026-10-06 a lista ficava no próprio SQL (`#Virt_Calendario`, 43 datas de
 2025 e 2026, com `Conta_SLA`). Desde 2026-10-07 a Virtual TI usa o calendário
