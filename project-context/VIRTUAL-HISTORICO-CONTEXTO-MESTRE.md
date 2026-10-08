@@ -1250,3 +1250,31 @@ repositórios) deixou de procurar a cópia do COI; README e documentação do Po
 BI citam só os três repositórios. Onde a seção anterior fala em "cinco cópias",
 valem agora quatro. Nenhum SQL, `.m`, leitor ou cálculo mudou; o `.m` continua
 em dia com a sua fonte (`verificar_feriados.ps1`: tudo certo).
+
+### 2026-10-08 — `Prioridade` com número e nome
+
+A coluna `Prioridade` deixa de sair só com o número e passa a sair como
+`1 - Máxima`, `2 - Alta`, `3 - Média`, `4 - Baixa`, `5 - Mínima` (texto; os
+mesmos rótulos da `Severidade` da A2B e da Decision). Muda só a projeção final
+do bloco `[12]`: metas, fatores (junção com `#Virt_Parametros`) e `chave`
+continuam com o número. Fora de 1 a 5 sai só o número; vazio continua vazio.
+Novo SHA256 LF do bloco `MOTOR VIRTUAL_TI`:
+`18f65a3d215b511bc10830a0087d2c0b5b4a3236a88281d8acd3d536ce634ae0`. No PBIX,
+a coluna passa de número inteiro para texto.
+
+### 2026-10-08 (2ª) — `Tempo Total Virtual TI` e `chave` → `Chave`
+
+Nova coluna 41, `Tempo Total Virtual TI`: posse da Virtual TI até a Resolução,
+em qualquer status, somando todas as janelas. Usa o valor que o motor já somava
+para a parada (`#Virt_Tempo.posse_sol_s`, levado a `#Virt_Calculo`); por
+construção, `Tsol` + `Tempo Parada Contagem NMS` = `Tempo Total Virtual TI`
+em segundos. Informativa: nenhum tempo, excesso, índice, FAIA ou FARC mudou.
+`chave` passa a `Chave` (só o alias; posição 20, mesmos valores, prioridade em
+número). Regressão em 2026-10-08 (período 2025-10-01 a 2026-10-08):
+FECHAMENTO 289 e RESOLUCAO 294 chamados, 0 diferenças nas 40 colunas
+anteriores; a soma confere em todos; a reconstrução independente pelos
+movimentos de entrada e saída dá o mesmo valor em todos; mesmo valor nos dois
+modos. Novo SHA256 LF do bloco `MOTOR VIRTUAL_TI`:
+`7f4a83e673b7db6cd5dffe096ab2c0c5e8607431d61007434bfff5295d64bbeb`. No PBIX,
+conferir o que usa `chave` (em 2026-10-07 ela foi mantida para não quebrar
+relação).

@@ -52,7 +52,7 @@ item contratual (seção 11).
 
 ## 1. Saída
 
-Uma execução devolve **um resultado**, com 40 colunas: todos os chamados
+Uma execução devolve **um resultado**, com 41 colunas: todos os chamados
 elegíveis, nas duas Contagens. A coluna `Contagem` diz a janela de contagem de
 cada chamado (seção 3). Até 2026-10-06 eram dois resultados, `Chamados_TCU` e
 `Chamados_24x7`, com as mesmas colunas.
@@ -75,7 +75,7 @@ Uma linha por chamado. As colunas vêm em blocos (lista completa na seção 8):
 | A — identificação e datas | 1 a 9: do `ID Chamado` até `Data/Hora Fechamento` |
 | B — apuração | 10 a 24: `Tini (h)` até `Indice FAIA` |
 | C — contexto | 25 a 37: `Status` até `Situação Meta Resolução` |
-| D — grupo, agendamento e encerramento | 38: `Grupo`; 39: `Indicador de Agendamento`; 40: `Data de Encerramento Virtual TI` |
+| D — grupo, agendamento, encerramento e tempo total | 38: `Grupo`; 39: `Indicador de Agendamento`; 40: `Data de Encerramento Virtual TI`; 41: `Tempo Total Virtual TI` |
 
 ## 2. Escopo e período
 
@@ -288,7 +288,7 @@ metas e cobertura da **Tabela 1**, fatores da **Tabela 2** (% por hora ou
 fração de hora excedida). Conferidos no PDF original em 2026-10-07; são os
 mesmos usados desde a primeira versão.
 
-| Tipo | Prioridade | Meta Resposta (primeiro atendimento) | Meta Resolução | Contagem (Cobertura) | Fator FAIA | Fator FARC | chave |
+| Tipo | Prioridade | Meta Resposta (primeiro atendimento) | Meta Resolução | Contagem (Cobertura) | Fator FAIA | Fator FARC | Chave |
 |---|---|---|---|---|---|---|---|
 | Incidente | 1 | 60 min | 12h | 24x7 | 0,4 | 0,4 | `Incidente\|1\|24x7` |
 | Incidente | 2 | 2h | 24h | 24x7 | 0,4 | 0,4 | `Incidente\|2\|24x7` |
@@ -377,11 +377,24 @@ ativos, somada em todas as janelas. `Tempo Parada Contagem NMS` é o restante
 da posse até a Resolução:
 
 ```text
-Tsol + Tempo Parada Contagem NMS = tempo de posse até a Resolução
+Tsol + Tempo Parada Contagem NMS = tempo de posse até a Resolução = Tempo Total Virtual TI
 ```
 
 O tempo fora da posse (antes da primeira entrada na Virtual TI e entre uma saída e
-uma reentrada) não entra em nenhum dos dois.
+uma reentrada) não entra em nenhum dos três.
+
+`Tempo Total Virtual TI` é esse tempo de posse até a Resolução, já somado pelo
+motor (`posse_sol_s`, o mesmo valor de onde sai a parada):
+
+- começa na entrada na Virtual TI (ou na abertura, se o chamado nasceu nela);
+- soma todas as janelas de posse, em status ativo ou que pausa;
+- para nas saídas para outro grupo e volta nas reentradas;
+- termina na Resolução: o tempo entre a Resolução e o fechamento não entra.
+
+É o mesmo valor nos modos `FECHAMENTO` e `RESOLUCAO` (o modo só escolhe quais
+chamados entram). É informativo: não entra em excesso, índice, FAIA ou FARC.
+Não é o intervalo entre a abertura e o fechamento, e não foi conferido como
+equivalente ao `Tempo Total Decision`, que segue a mecânica própria da Decision.
 
 Exemplo (SDM 1698592, duas passagens):
 
@@ -398,7 +411,7 @@ Tini 0:01:27   Tsol 2:09:24   Tempo Parada Contagem NMS 0:03:09
 Um chamado em `Agendado` por meses dentro da posse (rotinas que a Virtual TI
 reagenda) acumula esse tempo em `Tempo Parada Contagem NMS`, e não em `Tsol`.
 Exemplo: 1651174 ficou nove meses quase todo em `Agendado`; `Tsol` 4:55:25,
-parada 6331:19:38, FARC 0.
+parada 6331:19:38, `Tempo Total Virtual TI` 6336:15:03, FARC 0.
 
 ### 7.3 Reabertura
 
@@ -439,6 +452,7 @@ números e nunca são calculados a partir do texto.
 | `Indice FAIA` | Excesso Resposta (horas, 6 casas) × Fator FAIA |
 | `Indice FARC` | Excesso Resolução (horas, 6 casas) × Fator FARC |
 | `Tempo Parada Contagem NMS (h)` | posse até a Resolução − `Tsol`, corrido (7.2) |
+| `Tempo Total Virtual TI` | posse até a Resolução, corrido, em qualquer status = `Tsol` + `Tempo Parada Contagem NMS` (7.2) |
 | `Meta Primeiro Atendimento` | `Não Atende` se Excesso Resposta > 0; `Atende` se 0; `N/A` sem valor |
 | `Situação Meta Resolução` | o mesmo, sobre Excesso Resolução |
 
@@ -452,7 +466,8 @@ números e nunca são calculados a partir do texto.
 - Na Contagem `24x7` essas horas são informativas (até 2026-10-07 saíam 0 e o
   total); o excesso usa o tempo corrido.
 - `Tempo Parada Contagem NMS` é informativo: já está fora do `Tsol` e não é
-  descontado de novo de nenhum excesso ou índice.
+  descontado de novo de nenhum excesso ou índice. `Tempo Total Virtual TI`
+  também é informativo.
 - **Índice** em **pontos percentuais**: 8,065 h de excesso × 0,4 = 3,226.
 - Com o fallback da captura (seção 4), todo chamado que entrou na Virtual TI tem
   Início.
@@ -475,6 +490,7 @@ Diferenças em relação à Decision:
 | Passagens no Tempo de Atendimento | a partir da última entrada | todas as janelas de posse | a Virtual TI atende em mais de uma passagem |
 | Fim do Tempo de Atendimento | 1º `SOLN`, senão `resolve_date` | Resolução (`resolve_date`), com o `SOLN` como pausa | na Virtual TI a entrega é a ida para `Em homologação`; o `SOLN` é raro e pode ser seguido de reabertura |
 | Tempo de parada | posse da abertura ao `close_date`, em status fora dos ativos do `Tempo Total Decision` | posse até a Resolução − `Tsol` | a Virtual TI não tem `Tempo Total Decision`; a parada é o complemento do `Tsol` no mesmo intervalo |
+| Tempo total | `Tempo Total Decision` (mecânica própria) | `Tempo Total Virtual TI` = posse até a Resolução | não conferidos como equivalentes; na Virtual TI o intervalo termina na Resolução |
 
 ### 7.6 Indicadores
 
@@ -492,7 +508,7 @@ Os indicadores não mudam tempos, excessos nem índices.
 | 1 | ID Chamado | `call_req.ref_num` | — | número do chamado (6.19.6) |
 | 2 | Resumo | `call_req.summary` | sem espaços nas pontas | breve descrição do chamado (6.19.14) |
 | 3 | Tipo (Incidente/Solicitação) | `call_req.type` | I → Incidente, R → Solicitação | tipo (6.19.2) |
-| 4 | Prioridade | `call_req.priority` | número 1 a 5 | prioridade (Tabela 4) |
+| 4 | Prioridade | `call_req.priority` | número e nome: `1 - Máxima`, `2 - Alta`, `3 - Média`, `4 - Baixa`, `5 - Mínima` (fora de 1 a 5: só o número; vazio continua vazio) | prioridade (Tabela 4) |
 | 5 | Contagem | parâmetros | `24x7` / `Horário TCU` / `N/A` | cobertura (Tabela 1) |
 | 6 | Data/Hora Abertura | `open_date` | seção 4 | registro do chamado |
 | 7 | Data/Hora Início Atendimento | `act_log`: 1º `Em andamento` dentro da posse; senão 1ª atividade na posse; senão a entrada | seção 4 (congelado) | — |
@@ -508,7 +524,7 @@ Os indicadores não mudam tempos, excessos nem índices.
 | 17 | Meta Resolução (h) | parâmetros | Tabela 1 | resolução |
 | 18 | Excesso Resposta (h) | 12 (Horário TCU) ou 10 (24x7) − 16 | mín. 0 | Exc (Equação 1) |
 | 19 | Excesso Resolução (h) | 14 (Horário TCU) ou 11 (24x7) − 17 | mín. 0 | Exc (Equação 4); tempo extrapolado |
-| 20 | chave | 3, 4, 5 | `Tipo\|Prioridade\|Contagem` | — |
+| 20 | Chave | 3, 4, 5 | `Tipo\|Prioridade\|Contagem`, com a prioridade em número (`Solicitação\|3\|Horário TCU`) | — |
 | 21 | Fator FARC | parâmetros | Tabela 2 | fator FARC |
 | 22 | Indice FARC | 19 × 21 | pontos percentuais | IndFARC (Equação 5) |
 | 23 | Fator FAIA | parâmetros | Tabela 2 | fator FAIA |
@@ -529,8 +545,13 @@ Os indicadores não mudam tempos, excessos nem índices.
 | 38 | Grupo | `act_log` (transferências) | grupo no fechamento ou na resolução | — |
 | 39 | Indicador de Agendamento | `act_log` | `Sim` / `Não` (7.6) | — |
 | 40 | Data de Encerramento Virtual TI | `act_log` | informativa (seção 4) | — |
+| 41 | Tempo Total Virtual TI | janelas de posse até 8, qualquer status | corrido; = 11 + 31; informativo (7.2) | — |
 
 ### 8.1 Nomes revisados em 2026-10-07
+
+Em 2026-10-08 a coluna `Prioridade` passou a trazer o número com o nome (`3` → `3 - Média`), nos mesmos rótulos da `Severidade` da A2B e da Decision. É só apresentação: as metas e os fatores (junção com os parâmetros) e a `Chave` continuam usando o número (`call_req.priority`), e nenhuma outra coluna mudou.
+
+Também em 2026-10-08: `chave` passou a se chamar `Chave` (mesma posição, mesma composição `Tipo|Prioridade|Contagem` e mesmos valores, com a prioridade em número), e entrou a coluna 41, `Tempo Total Virtual TI` (7.2). Nenhuma outra coluna mudou.
 
 | Antes | Depois | Fundamento |
 |---|---|---|

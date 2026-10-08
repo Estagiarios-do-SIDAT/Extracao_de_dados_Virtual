@@ -41,7 +41,7 @@ Para gerar de novo (depois de qualquer mudança no SQL):
 ```
 
 SHA256 do bloco `MOTOR VIRTUAL_TI` (fim de linha LF), para conferência:
-`b4a9fb90720c7c2898926755987c7e0b92a9a63b2e203a5767cac0b2ed6f446d`.
+`7f4a83e673b7db6cd5dffe096ab2c0c5e8607431d61007434bfff5295d64bbeb`.
 
 ## 2. Como usar no Power BI
 
@@ -86,14 +86,14 @@ todos os chamados resolvidos na janela.
 
 ## 4. Saída
 
-40 colunas, uma linha por chamado:
+41 colunas, uma linha por chamado:
 
 | # | Coluna | Conteúdo |
 |---|---|---|
 | 1 | ID Chamado | texto |
 | 2 | Resumo | `call_req.summary` |
 | 3 | Tipo (Incidente/Solicitação) | texto |
-| 4 | Prioridade | número 1 a 5 (Tabela 4 do Anexo VII) |
+| 4 | Prioridade | número e nome: `1 - Máxima`, `2 - Alta`, `3 - Média`, `4 - Baixa`, `5 - Mínima` (Tabela 4 do Anexo VII); texto, ordena de 1 a 5. Só apresentação: metas, fatores e `Chave` usam o número. Valor fora de 1 a 5 sai só com o número; vazio continua vazio |
 | 5 | Contagem | `24x7` / `Horário TCU` / `N/A` (a "Cobertura" da Tabela 1) |
 | 6 | Data/Hora Abertura | data e hora (Brasil) |
 | 7 | Data/Hora Início Atendimento | Primeiro Atendimento (congelado) |
@@ -109,7 +109,7 @@ todos os chamados resolvidos na janela.
 | 17 | Meta Resolução (h) | `[h]:mm:ss` |
 | 18 | Excesso Resposta (h) | `[h]:mm:ss` |
 | 19 | Excesso Resolução (h) | `[h]:mm:ss` |
-| 20 | chave | `Tipo\|Prioridade\|Contagem` |
+| 20 | Chave | `Tipo\|Prioridade\|Contagem`, com a prioridade em número (ex.: `Solicitação\|3\|Horário TCU`) |
 | 21 | Fator FARC | decimal |
 | 22 | Indice FARC | pontos percentuais |
 | 23 | Fator FAIA | decimal |
@@ -130,6 +130,7 @@ todos os chamados resolvidos na janela.
 | 38 | Grupo | grupo no instante de referência (valor do SDM, ex.: `Fornecedores - Virtual`) |
 | 39 | Indicador de Agendamento | `Sim` / `Não`: passou para `Agendado` durante a posse da Virtual TI |
 | 40 | Data de Encerramento Virtual TI | último encerramento da Virtual TI na posse (entrada em `Em homologação` ou `SOLN`); vazia se não houver |
+| 41 | Tempo Total Virtual TI | `[h]:mm:ss`: posse até a resolução, em qualquer status, somando todas as janelas = `Tsol (h)` + `Tempo Parada Contagem NMS (h)`; informativo |
 
 Origem de cada coluna:
 [`docs/virtual-calculation.md`, seção 8](../docs/virtual-calculation.md#8-mapa-das-colunas).
@@ -143,8 +144,8 @@ escopo.
 
 Com o mesmo período, o `.m` e a consulta de referência têm as mesmas linhas e
 os mesmos valores. Para conferir, rode a referência com as datas da janela do
-Power BI (`tools/executar_consulta.ps1`). Validado em 2026-10-07: 282 chamados,
-40 colunas, 0 diferenças entre a referência com a janela do Power BI e o `.m`
+Power BI (`tools/executar_consulta.ps1`). Validado em 2026-10-08: 289 chamados,
+41 colunas, 0 diferenças entre a referência com a janela do Power BI e o `.m`
 executado no motor do Power BI Desktop.
 
 A planilha `analysis/virtual-query-report-analysis.xlsx` pode ser usada para
@@ -173,20 +174,29 @@ início.
   **Normas**; a ficha da Portaria anual lista as alterações em "Alterada por").
   Não entram feriados estaduais, municipais ou de outros órgãos.
 
-### As três seções
+### As seções e a classificação das datas
+
+O arquivo tem **duas seções**:
 
 | Seção (título literal no arquivo) | O que guarda | Formato | Vale |
 |---|---|---|---|
-| `## Feriados Fixos` | feriados nacionais que caem sempre no mesmo dia | `DD-MM` | todo ano |
-| `## Feriados móveis/diferenciados` | datas que a Portaria classifica como **feriado nacional**, mas cujo dia muda a cada ano (hoje, só a Paixão de Cristo) | `DD-MM-AAAA` | só naquele dia |
-| `## Pontos Facultativos` | dias que a Portaria define como **ponto facultativo**: Carnaval, Quarta-Feira de Cinzas, Corpus Christi, emendas, vésperas, Dia do Servidor Público e datas extraordinárias | `DD-MM-AAAA` | só naquele dia |
+| `## Feriados Fixos` | só os feriados nacionais que caem sempre no mesmo dia | `DD-MM` | todo ano |
+| `## Feriados móveis/diferenciados e pontos facultativos` | todas as datas de um ano específico, agrupadas sob `Ano de AAAA.` | `DD-MM-AAAA` | só naquele dia |
 
-A seção segue a **classificação da Portaria**, e não o fato de a data mudar de
-um ano para outro: Carnaval e Corpus Christi também mudam de data, mas a
-Portaria-TCU nº 1/2026, por exemplo, os define como ponto facultativo e a
-Paixão de Cristo como feriado nacional. As duas seções com ano têm o mesmo
-efeito no cálculo; a separação serve para conferir o arquivo contra a
-Portaria.
+A segunda seção junta duas classificações da Portaria porque, no cálculo, as
+duas têm o mesmo efeito: o dia inteiro sai do Horário TCU (a contagem 24x7 não
+muda). A classificação oficial continua existindo e é a que se confere na
+Portaria:
+
+| Classificação na Portaria | Exemplos | Onde fica no arquivo |
+|---|---|---|
+| feriado nacional de data fixa | Natal, Tiradentes, Finados | `## Feriados Fixos` |
+| feriado nacional de data variável | Paixão de Cristo (Sexta-feira da Paixão) | segunda seção |
+| ponto facultativo | Carnaval, Quarta-Feira de Cinzas, Corpus Christi, emendas, vésperas, Dia do Servidor Público, datas extraordinárias | segunda seção |
+
+Carnaval e Corpus Christi também mudam de data, mas a Portaria-TCU nº 1/2026,
+por exemplo, os define como ponto facultativo; a Paixão de Cristo é feriado
+nacional. A Páscoa cai sempre num domingo e não é cadastrada.
 
 ### Formato do arquivo (contrato de leitura)
 
@@ -197,10 +207,10 @@ das pontas, é classificada assim:
 
 | Linha (exemplo) | Como é lida |
 |---|---|
-| `## Pontos Facultativos` | título de uma das três seções; maiúsculas, acentos e espaços a mais no nome não importam |
-| `## Observações`, `### Notas` | qualquer linha que comece com `##` é título: se o nome não for uma das três seções, **erro** |
+| `## Feriados Fixos` | título de uma das seções aceitas; maiúsculas, acentos e espaços a mais no nome não importam |
+| `## Observações`, `### Notas` | qualquer linha que comece com `##` é título: se o nome não for o de uma seção aceita, **erro**; uma seção repetida também é **erro** |
 | `25-12` | feriado fixo, só em `## Feriados Fixos`; vale para o mesmo dia e mês de todos os anos |
-| `04-06-2026` | data com ano, só em `## Feriados móveis/diferenciados` ou `## Pontos Facultativos`; vale só nesse dia |
+| `04-06-2026` | data com ano, só em `## Feriados móveis/diferenciados e pontos facultativos` (ou nas duas seções do formato antigo); vale só nesse dia |
 | `Ano de 2026.`, linha vazia, frase de texto | ignorada |
 | `04-06-2026 Corpus Christi` | **ignorada sem erro**: a data fica fora do calendário sem aviso |
 | `2026.`, `04/06/2026`, `4-6-2026`, `2026-06-04` | só números e sinais, fora do formato: **erro** |
@@ -221,6 +231,31 @@ Um ano sem nenhuma data com ano cadastrada **não** dá erro: nesse ano só os
 feriados fixos saem do Horário TCU, e a Paixão de Cristo e os pontos
 facultativos contam como dias úteis. Por isso o ano novo precisa ser cadastrado
 assim que a Portaria for publicada.
+
+### Formato antigo (três seções) e ordem segura de troca
+
+No formato anterior, as datas de um ano ficavam em duas seções separadas:
+`## Feriados móveis/diferenciados` (Paixão de Cristo) e `## Pontos Facultativos`.
+Os leitores (`.m` e `tools/feriados.ps1`) **ainda aceitam esse formato**, para
+que um painel já atualizado com o `.m` novo continue funcionando enquanto o
+`feriados.txt` do SharePoint não for trocado. Os dois formatos entregam ao SQL a
+mesma lista de datas; muda só a descrição de cada data, que não entra em nenhum
+cálculo (aparece apenas no diagnóstico opcional da consulta de referência da
+Decision). Não vale misturar: um arquivo com
+`## Feriados móveis/diferenciados e pontos facultativos` **e** alguma das duas
+seções antigas é erro, assim como repetir qualquer seção.
+
+Ordem segura:
+
+1. Publicar nos repositórios os leitores que aceitam os dois formatos.
+2. A equipe responsável atualiza a consulta de cada painel (Virtual TI,
+   Decision e A2B) com o `.m` novo e confirma uma atualização bem-sucedida.
+3. Só depois, substituir o `feriados.txt` do SharePoint pelo formato de duas
+   seções.
+
+Enquanto algum painel ainda usar o `.m` anterior, o arquivo do SharePoint deve
+continuar com três seções: o leitor anterior não reconhece a seção nova, e a
+atualização desse painel falharia com "seção desconhecida".
 
 ### Onde ficam as cópias
 
@@ -243,8 +278,10 @@ não as lê, porque a consulta exige a pasta do link.
 2. Edite o `docs/feriados.txt` de um dos repositórios:
    - **Feriados Fixos:** nada a fazer; já valem para o ano novo (só muda se a
      Portaria criar um feriado nacional fixo novo);
-   - nas outras duas seções, acrescente `Ano de AAAA.` e, abaixo, as datas do
-     ano, cada uma na seção que a Portaria indicar;
+   - na seção `## Feriados móveis/diferenciados e pontos facultativos`,
+     acrescente `Ano de AAAA.` e, abaixo, todas as datas daquele ano (feriado
+     nacional de data variável e pontos facultativos juntos), de preferência
+     em ordem cronológica;
    - Portaria que altere o calendário durante o ano: incluir, corrigir ou
      apagar a data;
    - não cadastre ano futuro antes da Portaria; não apague anos anteriores
@@ -394,7 +431,8 @@ Com a mensagem e, quando for o caso, a linha do arquivo:
   (link curto `/:t:/s/...`);
 - arquivo não encontrado na pasta do link, ou mais de um arquivo nela;
 - arquivo vazio, sem nenhuma data ou fora de UTF-8;
-- título de seção desconhecido;
+- título de seção desconhecido ou repetido, ou seções do formato novo e do
+  antigo no mesmo arquivo;
 - data fora do formato, inexistente, repetida ou na seção errada;
 - linha só com números e sinais que não seja uma data válida.
 
@@ -413,6 +451,9 @@ A Contagem de cada chamado (24x7 ou Horário TCU) vem do Anexo VII, por Tipo e P
 | 2026-10-06 | `Chamados_TCU` e `Chamados_24x7` (duas consultas) | uma consulta, com a coluna de Contagem |
 | 2026-10-06 | `Descrição do Chamado` | `Resumo` |
 | 2026-10-07 | `Severidade` (`3 - Média`) | `Prioridade` (`3`) |
+| 2026-10-08 | `Prioridade` (`3`, número) | `Prioridade` (`3 - Média`, texto; mesmo nome de coluna) |
+| 2026-10-08 | `chave` | `Chave` (mesma posição e mesmos valores) |
+| 2026-10-08 | — | nova coluna 41: `Tempo Total Virtual TI` |
 | 2026-10-07 | `Tipo SLA` (`Corrida` / `Comercial`) | `Contagem` (`24x7` / `Horário TCU`) |
 | 2026-10-07 | `Horas Comerciais ...` / `Horas Não Comerciais ...` | `Horas Horário TCU ...` / `Horas Fora Horário TCU ...` |
 | 2026-10-07 | `Tempo suspenso` | `Tempo Parada Contagem NMS (h)` |

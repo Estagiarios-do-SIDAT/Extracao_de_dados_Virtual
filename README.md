@@ -56,7 +56,7 @@ próprios.
 ## Consulta de referência
 
 [`queries/consulta_virtual_ti_faia_farc.sql`](queries/consulta_virtual_ti_faia_farc.sql)
-devolve **um resultado**, com 40 colunas e uma linha por chamado. A coluna
+devolve **um resultado**, com 41 colunas e uma linha por chamado. A coluna
 `Contagem` diz a janela de contagem (no Anexo VII, a "Cobertura" da Tabela 1):
 
 | Contagem | Prioridades | Janela (resposta inicial e resolução) | Anexo VII |
@@ -105,7 +105,8 @@ Em resumo:
   contando só os status ativos `Em andamento`, `Aberto, aguarda atendimento` e
   `Reaberto` (lista explícita, e não `cr_stat.hold`); os demais (`Aguarda
   atendimento`, `Agendado`, solução registrada...) pausam e vão para
-  `Tempo Parada Contagem NMS (h)`.
+  `Tempo Parada Contagem NMS (h)`. `Tempo Total Virtual TI` é a soma dos dois:
+  a posse até a resolução, em qualquer status (informativo).
 - **Excesso e índices:** excesso = tempo − meta, quando positivo, por chamado.
   Na Contagem `Horário TCU` o tempo é o das horas dentro do Horário TCU; na
   `24x7`, o tempo corrido. Índice = horas de excesso × fator, em pontos
@@ -115,7 +116,7 @@ Em resumo:
   `docs/virtual-calculation.md`, seção 11).
 - **Colunas:** identificação e datas (com `Data/Hora Fechamento`), as colunas
   de apuração e colunas de contexto: `Resumo` (`call_req.summary`),
-  `Prioridade` (1 a 5, Tabela 4), `Status`, `Categoria` (`prob_ctg.sym`), os
+  `Prioridade` (`1 - Máxima` a `5 - Mínima`, Tabela 4; as metas usam o número), `Status`, `Categoria` (`prob_ctg.sym`), os
   responsáveis pela abertura e pelo atendimento, `Item de Configuração`,
   `Grupo` (grupo no instante de referência: fechamento ou resolução, com o nome
   do SDM), `Situação Meta Resolução` e `Meta Primeiro Atendimento`
@@ -173,8 +174,8 @@ período, colunas, SharePoint, privacidade, gateway, checklist) e
 Os feriados e pontos facultativos ficam no **calendário**
 [`docs/feriados.txt`](docs/feriados.txt), e não no SQL. É um calendário só, o
 do TCU (Portarias do TCU de cada ano), igual para Virtual TI, Decision e A2B.
-O arquivo é texto simples, com três seções: `## Feriados Fixos` (`DD-MM`, valem
-todo ano), `## Feriados móveis/diferenciados` e `## Pontos Facultativos`
+O arquivo é texto simples, com duas seções: `## Feriados Fixos` (`DD-MM`, valem
+todo ano) e `## Feriados móveis/diferenciados e pontos facultativos`
 (`DD-MM-AAAA`, valem só no ano). Regras completas em
 [`powerbi/powerbi-query.md`](powerbi/powerbi-query.md), seção 6.
 

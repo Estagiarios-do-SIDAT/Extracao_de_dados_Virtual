@@ -901,6 +901,9 @@ SELECT
     -- Tempo Parada Contagem NMS: tempo de posse ate a Resolucao em status nao
     -- ativo (corrido). Tsol + parada = posse total ate a Resolucao.
     t.posse_sol_s - t.tsol_s AS parada_s,
+    -- Tempo Total Virtual TI: posse ate a Resolucao, todas as janelas, em
+    -- qualquer status (= tsol_s + parada_s). Informativo.
+    t.posse_sol_s,
     CONVERT(decimal(18,6), CONVERT(decimal(18,6), x.exc_sol_s  / 3600.0000000000) * m.FatorFARC) AS indice_farc,
     CONVERT(decimal(18,6), CONVERT(decimal(18,6), x.exc_resp_s / 3600.0000000000) * m.FatorFAIA) AS indice_faia
 INTO #Virt_Calculo
@@ -932,9 +935,10 @@ CREATE UNIQUE CLUSTERED INDEX IX_Virt_Calculo ON #Virt_Calculo (id);
 -- [12] Linhas finais.
 --      Bloco A: identificacao e datas. Bloco B: as colunas de apuracao. Bloco
 --      C: colunas de contexto. Nomes na terminologia do Anexo VII:
---      [Prioridade] = numero 1 a 5 do SDM (Tabela 4; a prioridade 5 nao tem
---      rotulo no contrato); [Contagem] = '24x7' ou 'Horário TCU' (a
---      "Cobertura" da Tabela 1; sem parametro = N/A); [chave] = Tipo |
+--      [Prioridade] = numero 1 a 5 do SDM com o nome ('1 - Máxima' ... '5 -
+--      Mínima'), so apresentacao: metas, fatores e [Chave] usam o numero
+--      (m.prioridade); [Contagem] = '24x7' ou 'Horário TCU' (a
+--      "Cobertura" da Tabela 1; sem parametro = N/A); [Chave] = Tipo |
 --      Prioridade | Contagem. As duracoes saem como texto [h]:mm:ss (horas
 --      acima de 24 sem virar o dia). A formatacao e feita so aqui, depois do
 --      calculo; fatores e indices continuam numericos.
@@ -945,7 +949,14 @@ SELECT
     m.ref_num AS [ID Chamado],
     m.resumo AS [Resumo],
     m.tipo AS [Tipo (Incidente/Solicitação)],
-    m.prioridade AS [Prioridade],
+    CASE m.prioridade
+        WHEN 1 THEN N'1 - Máxima'
+        WHEN 2 THEN N'2 - Alta'
+        WHEN 3 THEN N'3 - Média'
+        WHEN 4 THEN N'4 - Baixa'
+        WHEN 5 THEN N'5 - Mínima'
+        ELSE CONVERT(nvarchar(10), m.prioridade) -- fora de 1..5: o numero, sem nome; nulo segue nulo
+    END AS [Prioridade],
     ISNULL(m.contagem, N'N/A') AS [Contagem],
     m.abertura AS [Data/Hora Abertura],
     m.inicio AS [Data/Hora Início Atendimento],
@@ -962,7 +973,7 @@ SELECT
     f.meta_sol AS [Meta Resolução (h)],
     f.exc_resp AS [Excesso Resposta (h)],
     f.exc_sol AS [Excesso Resolução (h)],
-    CONCAT(m.tipo, N'|', m.prioridade, N'|', m.contagem) AS [chave],
+    CONCAT(m.tipo, N'|', m.prioridade, N'|', m.contagem) AS [Chave],
     m.FatorFARC AS [Fator FARC],
     c.indice_farc AS [Indice FARC],
     m.FatorFAIA AS [Fator FAIA],
@@ -1046,7 +1057,11 @@ SELECT
          ) THEN N'Sim' ELSE N'Não' END AS [Indicador de Agendamento],
     -- Data de Encerramento Virtual TI: bloco [6.3]. Nao e o fechamento (close_date)
     -- nem substitui a Resolucao.
-    m.encerramento_virtual AS [Data de Encerramento Virtual TI]
+    m.encerramento_virtual AS [Data de Encerramento Virtual TI],
+    -- Tempo Total Virtual TI: posse da Virtual TI ate a Resolucao (todas as
+    -- janelas; status ativos e que pausam) = Tsol + Tempo Parada Contagem NMS.
+    -- Informativo: nao muda tempo, excesso nem indice.
+    f.total AS [Tempo Total Virtual TI]
 INTO #Virt_Saida
 FROM #Virt_Marco AS m
 JOIN #Virt_Calculo AS c
@@ -1088,7 +1103,8 @@ CROSS APPLY (
         meta_sol  = CASE WHEN c.meta_sol_s  IS NULL THEN NULL ELSE CONCAT(c.meta_sol_s  / 3600, N':', RIGHT(CONCAT(N'0', c.meta_sol_s  % 3600 / 60), 2), N':', RIGHT(CONCAT(N'0', c.meta_sol_s  % 60), 2)) END,
         exc_resp  = CASE WHEN c.exc_resp_s  IS NULL THEN NULL ELSE CONCAT(c.exc_resp_s  / 3600, N':', RIGHT(CONCAT(N'0', c.exc_resp_s  % 3600 / 60), 2), N':', RIGHT(CONCAT(N'0', c.exc_resp_s  % 60), 2)) END,
         exc_sol   = CASE WHEN c.exc_sol_s   IS NULL THEN NULL ELSE CONCAT(c.exc_sol_s   / 3600, N':', RIGHT(CONCAT(N'0', c.exc_sol_s   % 3600 / 60), 2), N':', RIGHT(CONCAT(N'0', c.exc_sol_s   % 60), 2)) END,
-        parada    = CASE WHEN c.parada_s    IS NULL THEN NULL ELSE CONCAT(c.parada_s    / 3600, N':', RIGHT(CONCAT(N'0', c.parada_s    % 3600 / 60), 2), N':', RIGHT(CONCAT(N'0', c.parada_s    % 60), 2)) END
+        parada    = CASE WHEN c.parada_s    IS NULL THEN NULL ELSE CONCAT(c.parada_s    / 3600, N':', RIGHT(CONCAT(N'0', c.parada_s    % 3600 / 60), 2), N':', RIGHT(CONCAT(N'0', c.parada_s    % 60), 2)) END,
+        total     = CASE WHEN c.posse_sol_s IS NULL THEN NULL ELSE CONCAT(c.posse_sol_s / 3600, N':', RIGHT(CONCAT(N'0', c.posse_sol_s % 3600 / 60), 2), N':', RIGHT(CONCAT(N'0', c.posse_sol_s % 60), 2)) END
 ) AS f;
 
 -- <<< MOTOR VIRTUAL_TI ---------------------------------------------------------
@@ -1116,7 +1132,7 @@ SELECT
     [Meta Resolução (h)],
     [Excesso Resposta (h)],
     [Excesso Resolução (h)],
-    [chave],
+    [Chave],
     [Fator FARC],
     [Indice FARC],
     [Fator FAIA],
@@ -1136,6 +1152,7 @@ SELECT
     [Situação Meta Resolução],
     [Grupo],
     [Indicador de Agendamento],
-    [Data de Encerramento Virtual TI]
+    [Data de Encerramento Virtual TI],
+    [Tempo Total Virtual TI]
 FROM #Virt_Saida
 ORDER BY [Data/Hora Fechamento], [ID Chamado];

@@ -76,7 +76,7 @@ powerbi/consulta_virtual_ti_power_bi.m     (Power BI: últimos 12 meses + feriad
 <h2>5. Como funciona o calendário</h2>
 <ul>
 <li>O arquivo usado é o <b>feriados.txt</b>: no SharePoint para o painel; a cópia versionada é docs/feriados.txt. É o mesmo calendário do TCU para Virtual TI, Decision e A2B.</li>
-<li>Três seções: <b>Feriados Fixos</b> (formato DD-MM, valem todo ano), <b>Feriados móveis/diferenciados</b> (Paixão de Cristo, feriado nacional) e <b>Pontos Facultativos</b> (Carnaval, Quarta-Feira de Cinzas, Corpus Christi, emendas e vésperas), no formato DD-MM-AAAA, valendo só naquele ano. A seção segue a classificação da Portaria do TCU.</li>
+<li>Duas seções: <b>Feriados Fixos</b> (formato DD-MM, valem todo ano) e <b>Feriados móveis/diferenciados e pontos facultativos</b> (formato DD-MM-AAAA, valem só naquele ano). A Paixão de Cristo (feriado nacional) e os pontos facultativos (Carnaval, Quarta-Feira de Cinzas, Corpus Christi, emendas e vésperas) ficam juntos porque têm o mesmo efeito no cálculo; a classificação segue a Portaria do TCU.</li>
 <li>Cada data <b>sozinha na linha</b>: uma data com comentário na mesma linha é ignorada sem aviso. Não crie, renomeie nem traduza os três títulos de seção (linhas que começam com ##).</li>
 <li>Uma data cadastrada fica inteira fora do Horário TCU. Sábado e domingo nunca estão no Horário TCU.</li>
 <li>Para incluir uma data: editar o feriados.txt no SharePoint e salvar. A próxima atualização já usa a lista nova, sem mudar o SQL.</li>
@@ -131,6 +131,7 @@ powerbi/consulta_virtual_ti_power_bi.m     (Power BI: últimos 12 meses + feriad
 <li><b>Primeiro Atendimento</b> (coluna Data/Hora Início Atendimento): a primeira vez que a Virtual TI põe o chamado <b>Em andamento</b> enquanto ele está no grupo dela. Sem isso, a primeira atividade registrada na posse; sem atividade, a entrada no grupo.</li>
 <li><b>Tempo Primeiro Atendimento</b> (coluna Tini (h)): o tempo em que o chamado esteve com a Virtual TI até o primeiro atendimento. O tempo em outro grupo não conta.</li>
 <li><b>Tempo de Atendimento</b> (coluna Tsol (h)): o tempo com a Virtual TI até a resolução, só nos status ativos (Em andamento, Aberto aguarda atendimento e Reaberto). Os demais status (Aguarda atendimento, Agendado, solução registrada...) pausam a contagem e vão para Tempo Parada Contagem NMS (h). Saídas do grupo param o relógio; reentradas o religam.</li>
+<li><b>Tempo Total Virtual TI</b>: todo o tempo com a Virtual TI até a resolução, em qualquer status, somando as passagens pelo grupo. É a soma de Tsol (h) e Tempo Parada Contagem NMS (h). Não conta o tempo em outro grupo nem o tempo depois da resolução. Informativo: não muda FAIA nem FARC.</li>
 </ul>
 <p>Esses três tempos seguem a lógica operacional da Decision adaptada à Virtual TI (não a leitura literal dos marcos T0/T1/T2 do Anexo VII). O Tempo de Atendimento <b>não</b> conta desde a abertura do chamado.</p>
 
@@ -141,7 +142,7 @@ powerbi/consulta_virtual_ti_power_bi.m     (Power BI: últimos 12 meses + feriad
 <tr><td>Resumo</td><td>Resumo do chamado no SDM (campo summary do registro principal)</td></tr>
 <tr><td>Categoria</td><td>Categoria do chamado no SDM (classificação do registro principal)</td></tr>
 <tr><td>Tipo (Incidente/Solicitação)</td><td>Tipo do chamado</td></tr>
-<tr><td>Prioridade</td><td>Número de 1 a 5</td></tr>
+<tr><td>Prioridade</td><td>Número e nome: 1 - Máxima, 2 - Alta, 3 - Média, 4 - Baixa, 5 - Mínima (ordena de 1 a 5). Só apresentação: metas, fatores e Chave usam o número. Fora de 1 a 5, só o número; vazio continua vazio</td></tr>
 <tr><td>Contagem</td><td>24x7 ou Horário TCU</td></tr>
 <tr><td>Data/Hora Abertura, Data/Hora Resolução, Data/Hora Fechamento</td><td>Marcos do chamado no SDM (horário do Brasil)</td></tr>
 <tr><td>Data/Hora Início Atendimento</td><td>Primeiro Atendimento</td></tr>
@@ -150,6 +151,7 @@ powerbi/consulta_virtual_ti_power_bi.m     (Power BI: últimos 12 meses + feriad
 <tr><td>Horas Horário TCU / Fora Horário TCU (Resposta e Resolução)</td><td>Parte do tempo dentro e fora do Horário TCU</td></tr>
 <tr><td>Meta Resposta (h), Meta Resolução (h)</td><td>Metas da tabela da seção 9</td></tr>
 <tr><td>Excesso Resposta (h), Excesso Resolução (h)</td><td>Quanto passou da meta</td></tr>
+<tr><td>Chave</td><td>Tipo|Prioridade|Contagem, com a prioridade em número (ex.: Solicitação|3|Horário TCU)</td></tr>
 <tr><td>Fator FAIA, Indice FAIA, Fator FARC, Indice FARC</td><td>Fatores e índices em pontos percentuais</td></tr>
 <tr><td>Meta Primeiro Atendimento, Situação Meta Resolução</td><td>Atende ou Não Atende</td></tr>
 <tr><td>Tempo Parada Contagem NMS (h)</td><td>Tempo com a Virtual TI, até a resolução, em status que pausam</td></tr>
@@ -158,6 +160,7 @@ powerbi/consulta_virtual_ti_power_bi.m     (Power BI: últimos 12 meses + feriad
 <tr><td>Status, Responsável Abertura, Responsável Atendimento, Item de Configuração</td><td>Dados de contexto do chamado</td></tr>
 <tr><td>Indicador Reabertura, Indicador de Agendamento</td><td>Sim ou Não; informativos</td></tr>
 <tr><td>Data de Encerramento Virtual TI</td><td>Último encerramento da atuação da Virtual TI; informativa</td></tr>
+<tr><td>Tempo Total Virtual TI</td><td>Tempo com a Virtual TI até a resolução, em qualquer status (Tsol + parada); informativo</td></tr>
 </table>
 <p>As durações saem como texto [h]:mm:ss (ex.: 73:21:56). Os totais vêm das colunas numéricas Indice FAIA e Indice FARC.</p>
 
