@@ -158,9 +158,10 @@ referência pelo `tools/gerar_powerbi_m.ps1`: só o período muda (janela móvel
 dos últimos `@CoberturaMeses` meses, padrão 12, mais o mês corrente). Não
 existe um SQL separado do Power BI para manter em paralelo.
 
-Para trocar o endereço do SharePoint, altere apenas `SharePointFeriadosUrl`,
-no topo do `.m`. O link real do `feriados.txt` ainda está **pendente**
-(placeholder `INSERIR_URL_DO_ARQUIVO_FERIADOS_NO_SHAREPOINT`).
+O `.m` lê o `feriados.txt` pelo conector `SharePoint.Files` (Conta
+organizacional, site fixo). A única configuração é `SharePointFeriadosLink`, no
+topo do `.m`: o link do arquivo copiado do SharePoint, de onde saem a pasta e o
+nome.
 
 Documentação: [`powerbi/powerbi-query.md`](powerbi/powerbi-query.md) (arquivos,
 período, colunas, SharePoint, privacidade, gateway, checklist) e
@@ -174,8 +175,8 @@ Os feriados e pontos facultativos ficam no **calendário**
 do TCU (Portarias do TCU de cada ano), igual para Virtual TI, Decision e A2B.
 O arquivo é texto simples, com três seções: `## Feriados Fixos` (`DD-MM`, valem
 todo ano), `## Feriados móveis/diferenciados` e `## Pontos Facultativos`
-(`DD-MM-AAAA`, valem só no ano). As regras de preenchimento estão no próprio
-arquivo.
+(`DD-MM-AAAA`, valem só no ano). Regras completas em
+[`powerbi/powerbi-query.md`](powerbi/powerbi-query.md), seção 6.
 
 Para incluir um feriado: editar o `feriados.txt` no SharePoint e salvar; a
 próxima atualização do relatório já usa a lista nova, sem mudar o SQL nem

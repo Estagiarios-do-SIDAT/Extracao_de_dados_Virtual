@@ -67,7 +67,7 @@ powerbi/consulta_virtual_ti_power_bi.m     (Power BI: últimos 12 meses + feriad
 <h2>4. Como atualizar no Power BI</h2>
 <ol>
 <li>Primeira vez: <i>Página Inicial → Nova Fonte → Consulta Nula → Editor Avançado</i> e colar o arquivo <b>consulta_virtual_ti_power_bi.m</b> inteiro.</li>
-<li>Preencher <b>SharePointFeriadosUrl</b> (seção 6).</li>
+<li>SharePoint com <b>Conta organizacional</b> e SQL Server como hoje; as duas fontes como <b>Organizacional</b> (seção 6).</li>
 <li>Privacidade: SharePoint e SQL Server como <b>Organizacional</b>. Credenciais: SQL Server como hoje; SharePoint com conta organizacional. No gateway, permitir fontes de nuvem.</li>
 <li>Depois disso, basta <b>Atualizar</b>. A janela (últimos 12 meses completos + mês corrente, pela data de fechamento) anda sozinha.</li>
 <li>Mudança de regra: alterar a consulta de referência, gerar o .m de novo e colar no Editor Avançado. Mudança de feriado: só o arquivo no SharePoint.</li>
@@ -83,10 +83,10 @@ powerbi/consulta_virtual_ti_power_bi.m     (Power BI: últimos 12 meses + feriad
 <li>Data inválida, repetida, fora do formato ou fora da seção certa <b>interrompe a atualização</b> com a linha do problema. O painel nunca é calculado sem feriados.</li>
 </ul>
 
-<h2>6. Link do SharePoint</h2>
-<p>Para trocar o endereço do SharePoint, altere apenas <b>SharePointFeriadosUrl</b>. Fica logo no início do .m, no bloco CONFIGURACAO - SHAREPOINT; o endereço não aparece em nenhum outro lugar da consulta:</p>
-<pre>SharePointFeriadosUrl = &#39;link direto do feriados.txt&#39;   (no .m, entre aspas duplas)</pre>
-<div class='alerta'><b>Pendente:</b> o link real do feriados.txt no SharePoint ainda não foi registrado. O .m traz o marcador INSERIR_URL_DO_ARQUIVO_FERIADOS_NO_SHAREPOINT; enquanto ele estiver lá, a atualização falha pedindo o link. Use o link <b>direto</b> do arquivo (https://&lt;empresa&gt;.sharepoint.com/sites/&lt;site&gt;/Shared%20Documents/&lt;pasta&gt;/feriados.txt), o mesmo nos três painéis.</div>
+<h2>6. Calendário no SharePoint</h2>
+<p>O .m lê o feriados.txt pelo conector <b>SharePoint.Files</b> (Conta organizacional), num site fixo. A única configuração, no início do .m (bloco CONFIGURACAO - SHAREPOINT), é o link do arquivo copiado do SharePoint; dele saem a pasta e o nome, e o link não é aberto. A consulta exige exatamente um arquivo com esse nome nessa pasta:</p>
+<pre>SharePointFeriadosLink = link do feriados.txt (Copiar link no SharePoint; formato /:t:/r/sites/...)</pre>
+<div class='alerta'><b>Atenção:</b> publicar no repositório não atualiza o SharePoint. Depois de validar o feriados.txt, substitua o arquivo na pasta do SharePoint (mesmo nome, mesma pasta) e atualize o relatório.</div>
 
 <h2>7. Contagem: 24x7 e Horário TCU</h2>
 <table>
