@@ -1278,3 +1278,14 @@ modos. Novo SHA256 LF do bloco `MOTOR VIRTUAL_TI`:
 `7f4a83e673b7db6cd5dffe096ab2c0c5e8607431d61007434bfff5295d64bbeb`. No PBIX,
 conferir o que usa `chave` (em 2026-10-07 ela foi mantida para não quebrar
 relação).
+
+### 2026-10-08 (3ª) — `Indicador de Agendamento` → `Houve Agendamento`
+
+Só o nome de saída da coluna 39 mudou; a regra é a mesma: `Sim` quando houve
+ao menos uma transição com destino `Agendado` (código `AGENDADO`) dentro da
+posse da Virtual TI (mesmo critério de posse do Início), em todo o histórico, e
+não o status atual; `Não` caso contrário. Informativa. Posição, valores, as
+outras 40 colunas e todos os cálculos ficaram iguais. Novo SHA256 LF do bloco
+`MOTOR VIRTUAL_TI`:
+`ebfe93195566769054c2f9d0ede8cdd44f374db5b2936a2bf0196c1551ef958a`. No PBIX, conferir visuais, filtros e
+medidas que usam `Indicador de Agendamento`.

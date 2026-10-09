@@ -75,7 +75,7 @@ Uma linha por chamado. As colunas vêm em blocos (lista completa na seção 8):
 | A — identificação e datas | 1 a 9: do `ID Chamado` até `Data/Hora Fechamento` |
 | B — apuração | 10 a 24: `Tini (h)` até `Indice FAIA` |
 | C — contexto | 25 a 37: `Status` até `Situação Meta Resolução` |
-| D — grupo, agendamento, encerramento e tempo total | 38: `Grupo`; 39: `Indicador de Agendamento`; 40: `Data de Encerramento Virtual TI`; 41: `Tempo Total Virtual TI` |
+| D — grupo, agendamento, encerramento e tempo total | 38: `Grupo`; 39: `Houve Agendamento`; 40: `Data de Encerramento Virtual TI`; 41: `Tempo Total Virtual TI` |
 
 ## 2. Escopo e período
 
@@ -497,7 +497,7 @@ Diferenças em relação à Decision:
 | Coluna | Pergunta | Fonte | Depende da posse? | Valores |
 |---|---|---|---|---|
 | `Indicador Reabertura` | o chamado foi reaberto? | `act_log` com tipo contendo `reab` ou descrição/ação contendo `reabert`, em todo o histórico do chamado | não | `Sim` / `Não` |
-| `Indicador de Agendamento` | o chamado passou para `Agendado` enquanto estava com a Virtual TI? | registro de status com **destino** `Agendado` (código `AGENDADO`), dentro de uma janela de posse | sim | `Sim` / `Não` |
+| `Houve Agendamento` | o chamado passou para `Agendado` enquanto estava com a Virtual TI? | registro de status com **destino** `Agendado` (código `AGENDADO`), dentro de uma janela de posse | sim | `Sim` / `Não` |
 
 Os indicadores não mudam tempos, excessos nem índices.
 
@@ -543,13 +543,15 @@ Os indicadores não mudam tempos, excessos nem índices.
 | 36 | Justificativa | — | `-` | — |
 | 37 | Situação Meta Resolução | 19 | `Atende` / `Não Atende` / `N/A` | — |
 | 38 | Grupo | `act_log` (transferências) | grupo no fechamento ou na resolução | — |
-| 39 | Indicador de Agendamento | `act_log` | `Sim` / `Não` (7.6) | — |
+| 39 | Houve Agendamento | `act_log` | `Sim` / `Não` (7.6) | — |
 | 40 | Data de Encerramento Virtual TI | `act_log` | informativa (seção 4) | — |
 | 41 | Tempo Total Virtual TI | janelas de posse até 8, qualquer status | corrido; = 11 + 31; informativo (7.2) | — |
 
 ### 8.1 Nomes revisados em 2026-10-07
 
 Em 2026-10-08 a coluna `Prioridade` passou a trazer o número com o nome (`3` → `3 - Média`), nos mesmos rótulos da `Severidade` da A2B e da Decision. É só apresentação: as metas e os fatores (junção com os parâmetros) e a `Chave` continuam usando o número (`call_req.priority`), e nenhuma outra coluna mudou.
+
+Ainda em 2026-10-08, `Indicador de Agendamento` passou a se chamar `Houve Agendamento` (mesma posição 39, mesma regra e mesmos valores `Sim`/`Não`).
 
 Também em 2026-10-08: `chave` passou a se chamar `Chave` (mesma posição, mesma composição `Tipo|Prioridade|Contagem` e mesmos valores, com a prioridade em número), e entrou a coluna 41, `Tempo Total Virtual TI` (7.2). Nenhuma outra coluna mudou.
 

@@ -1028,7 +1028,7 @@ SELECT
     CASE WHEN @DataReferencia = N'FECHAMENTO'
          THEN COALESCE(gi.grupo_ultima_transferencia, gi.grupo_inicial)
          ELSE COALESCE(gres.grupo_para, gi.grupo_inicial) END AS [Grupo],
-    -- Indicador de Agendamento: houve ao menos uma transicao com DESTINO
+    -- Houve Agendamento: houve ao menos uma transicao com DESTINO
     -- 'Agendado' (em qualquer registro de status do act_log) dentro da posse da
     -- Virtual TI, com o mesmo criterio de posse do Inicio. Informativo: nao muda
     -- tempo, excesso nem indice.
@@ -1054,7 +1054,7 @@ SELECT
                               AND s.momento <= l.system_time
                       )
               )
-         ) THEN N'Sim' ELSE N'Não' END AS [Indicador de Agendamento],
+         ) THEN N'Sim' ELSE N'Não' END AS [Houve Agendamento],
     -- Data de Encerramento Virtual TI: bloco [6.3]. Nao e o fechamento (close_date)
     -- nem substitui a Resolucao.
     m.encerramento_virtual AS [Data de Encerramento Virtual TI],
@@ -1151,7 +1151,7 @@ SELECT
     [Justificativa],
     [Situação Meta Resolução],
     [Grupo],
-    [Indicador de Agendamento],
+    [Houve Agendamento],
     [Data de Encerramento Virtual TI],
     [Tempo Total Virtual TI]
 FROM #Virt_Saida

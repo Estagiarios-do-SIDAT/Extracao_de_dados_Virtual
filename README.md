@@ -124,7 +124,7 @@ Em resumo:
   `docs/virtual-calculation.md`, seção 8.1). As durações saem como
   `[h]:mm:ss`; fatores e índices são numéricos e calculados em segundos.
 - **Indicadores (`Sim`/`Não`):** `Indicador Reabertura` diz se o chamado foi
-  reaberto. `Indicador de Agendamento` diz se o chamado passou para `Agendado`
+  reaberto. `Houve Agendamento` diz se o chamado passou para `Agendado`
   durante a posse da Virtual TI. Os dois são informativos: não mudam tempos,
   excessos nem índices.
 - **Data de Encerramento Virtual TI:** o último encerramento da atuação da

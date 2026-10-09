@@ -41,7 +41,7 @@ Para gerar de novo (depois de qualquer mudança no SQL):
 ```
 
 SHA256 do bloco `MOTOR VIRTUAL_TI` (fim de linha LF), para conferência:
-`7f4a83e673b7db6cd5dffe096ab2c0c5e8607431d61007434bfff5295d64bbeb`.
+`ebfe93195566769054c2f9d0ede8cdd44f374db5b2936a2bf0196c1551ef958a`.
 
 ## 2. Como usar no Power BI
 
@@ -128,7 +128,7 @@ todos os chamados resolvidos na janela.
 | 36 | Justificativa | `-` |
 | 37 | Situação Meta Resolução | `Atende` / `Não Atende` / `N/A` |
 | 38 | Grupo | grupo no instante de referência (valor do SDM, ex.: `Fornecedores - Virtual`) |
-| 39 | Indicador de Agendamento | `Sim` / `Não`: passou para `Agendado` durante a posse da Virtual TI |
+| 39 | Houve Agendamento | `Sim` / `Não`: passou para `Agendado` durante a posse da Virtual TI |
 | 40 | Data de Encerramento Virtual TI | último encerramento da Virtual TI na posse (entrada em `Em homologação` ou `SOLN`); vazia se não houver |
 | 41 | Tempo Total Virtual TI | `[h]:mm:ss`: posse até a resolução, em qualquer status, somando todas as janelas = `Tsol (h)` + `Tempo Parada Contagem NMS (h)`; informativo |
 
@@ -454,6 +454,7 @@ A Contagem de cada chamado (24x7 ou Horário TCU) vem do Anexo VII, por Tipo e P
 | 2026-10-08 | `Prioridade` (`3`, número) | `Prioridade` (`3 - Média`, texto; mesmo nome de coluna) |
 | 2026-10-08 | `chave` | `Chave` (mesma posição e mesmos valores) |
 | 2026-10-08 | — | nova coluna 41: `Tempo Total Virtual TI` |
+| 2026-10-08 | `Indicador de Agendamento` | `Houve Agendamento` (mesma posição e mesmos valores) |
 | 2026-10-07 | `Tipo SLA` (`Corrida` / `Comercial`) | `Contagem` (`24x7` / `Horário TCU`) |
 | 2026-10-07 | `Horas Comerciais ...` / `Horas Não Comerciais ...` | `Horas Horário TCU ...` / `Horas Fora Horário TCU ...` |
 | 2026-10-07 | `Tempo suspenso` | `Tempo Parada Contagem NMS (h)` |
